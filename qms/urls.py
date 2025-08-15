@@ -22,6 +22,7 @@ from apps.quotations.views_preview import StaticHTMLPreview
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("quotations/", include("apps.quotations.urls", namespace="quotations")),
+    path("accounts/", include("apps.accounts.urls", namespace="accounts")),
     path('preview/<path:template_name>/', StaticHTMLPreview.as_view(), name="static_preview"),
 
 ]
