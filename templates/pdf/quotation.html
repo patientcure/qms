@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size: 12px; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { border: 1px solid #ddd; padding: 6px; }
+    .right { text-align: right; }
+  </style>
+</head>
+<body>
+  <h2>Quotation {{ quotation.quotation_number }}</h2>
+  {% if company %}
+  <div><strong>{{ company.name }}</strong><br/>{{ company.address }}</div>
+  {% endif %}
+  <hr/>
+  <p><strong>Customer:</strong> {{ quotation.customer.name }} — {{ quotation.customer.email }}</p>
+
+  <table class="table">
+    <thead><tr><th>Product</th><th>Desc</th><th>Qty</th><th>Unit</th><th>Tax %</th><th class="right">Line Total</th></tr></thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.product.name }}</td>
+        <td>{{ it.description }}</td>
+        <td class="right">{{ it.quantity }}</td>
+        <td class="right">{{ it.unit_price }}</td>
+        <td class="right">{{ it.tax_rate }}</td>
+        <td class="right">{{ it.quantity|floatformat:0|add:""|yesno:"" }}{{ it.quantity|floatformat:0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 class="right">Subtotal: {{ quotation.subtotal }} | Tax: {{ quotation.tax_total }} | Total: {{ quotation.total }}</h3>
+
+  {% if quotation.terms %}
+  <h4>Terms & Conditions</h4>
+  <div>{{ quotation.terms.content_html|safe }}</div>
+  {% endif %}
+</body>
+</html>

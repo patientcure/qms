@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Quotations{% endblock %}
+{% block content %}
+<form method="get" class="bg-white p-4 rounded-xl shadow mb-4 grid grid-cols-6 gap-3">
+  <input name="q" value="{{ request.GET.q }}" placeholder="Search number/name/email" class="col-span-2 border rounded p-2" />
+  <select name="status" class="border rounded p-2">
+    <option value="">All Status</option>
+    {% for key,label in status_choices %}
+
+      <option value="{{ key }}" {% if request.GET.status == key %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="from" value="{{ request.GET.from }}" class="border rounded p-2" />
+  <input type="date" name="to" value="{{ request.GET.to }}" class="border rounded p-2" />
+  <button class="px-3 py-2 bg-slate-900 text-white rounded">Filter</button>
+  <a class="px-3 py-2 border rounded text-center" href="{% url 'quotations:export_csv' %}?{{ request.GET.urlencode }}">CSV Export</a>
+</form>
+
+<div class="bg-white rounded-xl shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-100">
+      <tr>
+        <th class="text-left p-2">Number</th>
+        <th class="text-left p-2">Customer</th>
+        <th class="text-left p-2">Status</th>
+        <th class="text-left p-2">Total</th>
+        <th class="text-left p-2">Follow-up</th>
+        <th class="text-left p-2">Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q in object_list %}
+      <tr class="border-t">
+        <td class="p-2">{{ q.quotation_number }}</td>
+        <td class="p-2">{{ q.customer.name }}</td>
+        <td class="p-2">{{ q.get_status_display }}</td>
+        <td class="p-2">{{ q.total }}</td>
+        <td class="p-2">{{ q.follow_up_date|default:"-" }}</td>
+        <td class="p-2">{{ q.created_at|date:"Y-m-d H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td class="p-4 text-slate-500" colspan="6">No quotations found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
