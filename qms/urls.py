@@ -28,3 +28,4 @@ urlpatterns = [
     path('accounts/<path:template_name>/',AccountsStaticHTMLPreview.as_view(), name="accounts_static_preview"),
 
 ]
+    

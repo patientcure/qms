@@ -132,21 +132,30 @@ class QuotationCSVExportView(LoginRequiredMixin, View):
         return export_quotations_csv(queryset)
 
 
-# ---------- Sales Dashboard ----------
-class SalesDashboardView(LoginRequiredMixin, TemplateView):
-    template_name = "quotations/dashboard.html"
+class SalespersonDashboardView(LoginRequiredMixin, TemplateView):
+    template_name = "accounts/salesperson_dashboard.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["upcoming"] = Quotation.objects.filter(
+        user = self.request.user
+
+        ctx['quotations'] = Quotation.objects.filter(assigned_to=self.request.user).order_by('-created_at')
+        ctx['leads'] = Lead.objects.filter(assigned_to=user).order_by('-created_at')
+
+        ctx['upcoming_followups'] = ctx['quotations'].filter(
             follow_up_date__isnull=False,
             status__in=[
                 QuotationStatus.PENDING,
                 QuotationStatus.IN_PROGRESS,
                 QuotationStatus.MAIL_SENT
             ]
-        ).order_by("follow_up_date")[:50]
+        ).order_by("follow_up_date")[:20]
+
+        # Pass status choices explicitly
+        ctx['status_choices'] = QuotationStatus.choices  # <-- add this
+
         return ctx
+
 
 
 # ---------- AJAX: Create Customer ----------
