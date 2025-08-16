@@ -83,11 +83,13 @@ class LeadForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['assigned_to'].queryset = User.objects.filter(role=Roles.SALESPERSON)
         
-        if self.instance and self.instance.customer:
-            self.fields['customer_name'].initial = self.instance.customer.name
-            self.fields['customer_email'].initial = self.instance.customer.email
-            self.fields['customer_phone'].initial = self.instance.customer.phone
-            self.fields['customer_company'].initial = self.instance.customer.company_name
+        customer = getattr(self.instance, "customer", None)
+        if customer:
+            self.fields['customer_name'].initial = customer.name
+            self.fields['customer_email'].initial = customer.email
+            self.fields['customer_phone'].initial = customer.phone
+            self.fields['customer_company'].initial = customer.company_name
+
 
     def clean(self):
         cleaned_data = super().clean()

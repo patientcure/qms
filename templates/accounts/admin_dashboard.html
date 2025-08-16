@@ -4,10 +4,8 @@
 {% block content %}
 <div class="p-6 bg-gray-50 min-h-screen" x-data="{ 
     openModal: null,
-    activeTab: window.location.hash ? window.location.hash.replace('#','') : 'salespeople',
-    exportStartDate: '',
-    exportEndDate: '',
-    exportProduct: ''
+    openLeadModal: null,
+    activeTab: window.location.hash ? window.location.hash.replace('#','') : 'salespeople'
 }">
 
     <!-- Header -->
@@ -24,25 +22,20 @@
     <!-- Tabs -->
     <div class="mb-6 border-b border-gray-200">
         <nav class="-mb-px flex space-x-8">
-            <button @click="activeTab = 'salespeople'" 
+            <button @click="activeTab = 'salespeople'; window.location.hash='salespeople'" 
                 :class="activeTab === 'salespeople' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                 class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
                 Sales Team
             </button>
-            <button @click="activeTab = 'quotations'" 
+            <button @click="activeTab = 'quotations'; window.location.hash='quotations'" 
                 :class="activeTab === 'quotations' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                 class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
                 Quotations
             </button>
-            <button @click="activeTab = 'leads'" 
+            <button @click="activeTab = 'leads'; window.location.hash='leads'" 
                 :class="activeTab === 'leads' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                 class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
                 Manage Leads
-            </button>
-            <button @click="activeTab = 'exports'; window.location.hash='exports'" 
-                :class="activeTab === 'exports' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Data Exports
             </button>
         </nav>
     </div>
@@ -104,21 +97,27 @@
         <!-- Header -->
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <h2 class="text-xl font-semibold text-gray-800">All Quotations</h2>
-            <a href="{% url 'quotations:create' %}" 
-               class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center whitespace-nowrap">
-                + Create Quotation
-            </a>
+            <div class="flex gap-2">
+                <a href="{% url 'quotations:admin_create_quotation' %}" 
+                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center whitespace-nowrap">
+                    + Create Quotation
+                </a>
+                <a href="{% url 'quotations:export_csv' %}?status={{ request.GET.status }}&customer={{ request.GET.customer }}&assigned_to={{ request.GET.assigned_to }}&from={{ request.GET.from }}&to={{ request.GET.to }}" 
+                   class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center whitespace-nowrap">
+                    Export CSV
+                </a>
+            </div>
         </div>
 
         <!-- Filters -->
         <div class="bg-white p-4 rounded-lg shadow">
-            <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="filter-form">
+            <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="quotation-filter-form">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                     <select name="status" class="w-full border rounded px-3 py-2 text-sm auto-submit">
                         <option value="">All Statuses</option>
                         {% for key, value in status_choices %}
-                        <option value="{{ key }}" {% if request.GET.status == key|stringformat:"s" %}selected{% endif %}>{{ value }}</option>
+                        <option value="{{ key }}" {% if request.GET.status == key %}selected{% endif %}>{{ value }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -203,76 +202,222 @@
         </div>
 
         <!-- Quotation Detail Modals -->
-        <!-- Quotation Detail Modals -->
-{% for q in quotations %}
-    <!-- Modal for Quotation Details -->
-    <div x-show="openModal === {{ q.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-        <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
-            <button @click="openModal = null" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">&times;</button>
-            <h2 class="text-2xl font-bold mb-4">Quotation Details</h2>
+        {% for q in quotations %}
+        <div x-show="openModal === {{ q.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+            <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
+                <button @click="openModal = null" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">&times;</button>
+                <h2 class="text-2xl font-bold mb-4">Quotation Details</h2>
 
-            <div class="space-y-2 mb-4">
-                <p><span class="font-semibold">Quotation Number:</span> {{ q.quotation_number }}</p>
-                <p><span class="font-semibold">Customer:</span> {{ q.customer.name }}</p>
-                <p><span class="font-semibold">Status:</span> {{ q.get_status_display }}</p>
-                <p><span class="font-semibold">Follow-up Date:</span> {{ q.follow_up_date|default:"Not set" }}</p>
-                <p><span class="font-semibold">Currency:</span> {{ q.currency }}</p>
-                <p><span class="font-semibold">Subtotal:</span> {{ q.subtotal }}</p>
-                <p><span class="font-semibold">Tax Total:</span> {{ q.tax_total }}</p>
-                <p><span class="font-semibold">Total:</span> {{ q.total }}</p>
-                <p><span class="font-semibold">Google Drive Link:</span> 
-                    {% if q.drive_web_view_link %}
-                        <a href="{{ q.drive_web_view_link }}" target="_blank" class="text-blue-600 hover:underline">View File</a>
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </p>
+                <div class="space-y-2 mb-4">
+                    <p><span class="font-semibold">Quotation Number:</span> {{ q.quotation_number }}</p>
+                    <p><span class="font-semibold">Customer:</span> {{ q.customer.name }}</p>
+                    <p><span class="font-semibold">Status:</span> {{ q.get_status_display }}</p>
+                    <p><span class="font-semibold">Follow-up Date:</span> {{ q.follow_up_date|default:"Not set" }}</p>
+                    <p><span class="font-semibold">Currency:</span> {{ q.currency }}</p>
+                    <p><span class="font-semibold">Subtotal:</span> {{ q.subtotal }}</p>
+                    <p><span class="font-semibold">Tax Total:</span> {{ q.tax_total }}</p>
+                    <p><span class="font-semibold">Total:</span> {{ q.total }}</p>
+                    <p><span class="font-semibold">Google Drive Link:</span> 
+                        {% if q.drive_web_view_link %}
+                            <a href="{{ q.drive_web_view_link }}" target="_blank" class="text-blue-600 hover:underline">View File</a>
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+
+                <!-- Quotation Items Table -->
+                {% if q.items.exists %}
+                <div class="overflow-x-auto mb-4">
+                    <table class="w-full table-auto border border-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-4 py-2 border">#</th>
+                                <th class="px-4 py-2 border">Item</th>
+                                <th class="px-4 py-2 border">Quantity</th>
+                                <th class="px-4 py-2 border">Unit Price</th>
+                                <th class="px-4 py-2 border">Tax Rate (%)</th>
+                                <th class="px-4 py-2 border">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in q.items.all %}
+                            <tr>
+                                <td class="px-4 py-2 border">{{ forloop.counter }}</td>
+                                <td class="px-4 py-2 border">{{ item.product.name }}</td>
+                                <td class="px-4 py-2 border">{{ item.quantity }}</td>
+                                <td class="px-4 py-2 border">{{ item.unit_price }}</td>
+                                <td class="px-4 py-2 border">{{ item.tax_rate }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p class="text-gray-500">No items added to this quotation.</p>
+                {% endif %}
             </div>
+        </div>
+        {% endfor %}
+    </div>
 
-            <!-- Quotation Items Table -->
-            {% if q.items.exists %}
-            <div class="overflow-x-auto mb-4">
-                <table class="w-full table-auto border border-gray-200">
-                    <thead class="bg-gray-100">
+    <!-- Leads -->
+    <div x-show="activeTab === 'leads'" class="space-y-6">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <h2 class="text-xl font-semibold text-gray-800">All Leads</h2>
+            <div class="flex gap-2">
+                <a href="{% url 'quotations:create_lead' %}" 
+                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center whitespace-nowrap">
+                    + Create Lead
+                </a>
+                <a href="{% url 'quotations:export_csv' %}?lead_status={{ request.GET.lead_status }}&lead_assigned_to={{ request.GET.lead_assigned_to }}&lead_from={{ request.GET.lead_from }}&lead_to={{ request.GET.lead_to }}" 
+                   class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center whitespace-nowrap">
+                    Export CSV
+                </a>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white p-4 rounded-lg shadow">
+            <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="lead-filter-form">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select name="lead_status" class="w-full border rounded px-3 py-2 text-sm auto-submit">
+                        <option value="">All Statuses</option>
+                        {% for key, value in lead_status_choices %}
+                        <option value="{{ key }}" {% if request.GET.lead_status == key %}selected{% endif %}>{{ value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                    <select name="lead_assigned_to" class="w-full border rounded px-3 py-2 text-sm auto-submit">
+                        <option value="">All Salespeople</option>
+                        {% for user in salespeople_list %}
+                        <option value="{{ user.id }}" {% if request.GET.lead_assigned_to == user.id|stringformat:"s" %}selected{% endif %}>{{ user }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                    <input type="date" name="lead_from" value="{{ request.GET.lead_from }}" class="w-full border rounded px-3 py-2 text-sm auto-submit">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                    <input type="date" name="lead_to" value="{{ request.GET.lead_to }}" class="w-full border rounded px-3 py-2 text-sm auto-submit">
+                </div>
+            </form>
+        </div>
+
+        <!-- Leads Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto">
+                    <thead class="bg-gray-100 text-gray-600">
                         <tr>
-                            <th class="px-4 py-2 border">#</th>
-                            <th class="px-4 py-2 border">Item</th>
-                            <th class="px-4 py-2 border">Quantity</th>
-                            <th class="px-4 py-2 border">Unit Price</th>
-                            <th class="px-4 py-2 border">Tax Rate (%)</th>
-                            <th class="px-4 py-2 border">Total</th>
+                            <th class="px-6 py-3 text-left">#</th>
+                            <th class="px-6 py-3 text-left">Customer</th>
+                            <th class="px-6 py-3 text-left">Assigned To</th>
+                            <th class="px-6 py-3 text-left">Status</th>
+                            <th class="px-6 py-3 text-left">Source</th>
+                            <th class="px-6 py-3 text-left">Created</th>
+                            <th class="px-6 py-3 text-left">Follow-up</th>
+                            <th class="px-6 py-3 text-left">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for item in q.items.all %}
+                    <tbody class="divide-y divide-gray-200">
+                        {% for lead in leads %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">{{ forloop.counter }}</td>
+                            <td class="px-6 py-4 font-medium text-blue-600">{{ lead.customer.name }}</td>
+                            <td class="px-6 py-4">{{ lead.assigned_to|default:"Unassigned" }}</td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-1 rounded-full text-xs 
+                                    {% if lead.status == 'pending' %}bg-gray-100 text-gray-800
+                                    {% elif lead.status == 'in_progress' %}bg-blue-100 text-blue-800
+                                    {% elif lead.status == 'converted' %}bg-green-100 text-green-800
+                                    {% elif lead.status == 'lost' %}bg-red-100 text-red-800
+                                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                    {{ lead.get_status_display }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">{{ lead.source|default:"-" }}</td>
+                            <td class="px-6 py-4">{{ lead.created_at|date:"d-m-Y" }}</td>
+                            <td class="px-6 py-4">{{ lead.follow_up_date|date:"d-m-Y"|default:"-" }}</td>
+                            <td class="px-6 py-4 space-x-2 whitespace-nowrap">
+                                <button @click="openLeadModal = {{ lead.id }}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View</button>
+                                <a href="{% url 'quotations:edit_lead' lead.pk %}" class="text-green-600 hover:text-green-800 text-sm font-medium">Edit</a>
+                            </td>
+                        </tr>
+                        {% empty %}
                         <tr>
-                            <td class="px-4 py-2 border">{{ forloop.counter }}</td>
-                            <td class="px-4 py-2 border">{{ item.name }}</td>
-                            <td class="px-4 py-2 border">{{ item.quantity }}</td>
-                            <td class="px-4 py-2 border">{{ item.unit_price }}</td>
-                            <td class="px-4 py-2 border">{{ item.tax_rate }}</td>
-                            <td class="px-4 py-2 border">{{ item.total|default:item.quantity|floatformat:2 }}</td>
+                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">No leads found</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            {% else %}
-                <p class="text-gray-500">No items added to this quotation.</p>
-            {% endif %}
         </div>
-    </div>
-    {% endfor %}
 
-<!-- Auto-submit filters -->
+        <!-- Lead Detail Modals -->
+        {% for lead in leads %}
+        <div x-show="openLeadModal === {{ lead.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+            <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
+                <button @click="openLeadModal = null" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">&times;</button>
+                <h2 class="text-2xl font-bold mb-4">Lead Details</h2>
+
+                <div class="space-y-2 mb-4">
+                    <p><span class="font-semibold">Customer:</span> {{ lead.customer.name }}</p>
+                    <p><span class="font-semibold">Company:</span> {{ lead.customer.company_name|default:"-" }}</p>
+                    <p><span class="font-semibold">Email:</span> {{ lead.customer.email }}</p>
+                    <p><span class="font-semibold">Phone:</span> {{ lead.customer.phone|default:"-" }}</p>
+                    <p><span class="font-semibold">Status:</span> {{ lead.get_status_display }}</p>
+                    <p><span class="font-semibold">Assigned To:</span> {{ lead.assigned_to|default:"Unassigned" }}</p>
+                    <p><span class="font-semibold">Source:</span> {{ lead.source|default:"-" }}</p>
+                    <p><span class="font-semibold">Follow-up Date:</span> {{ lead.follow_up_date|date:"d-m-Y"|default:"Not set" }}</p>
+                    <p><span class="font-semibold">Created At:</span> {{ lead.created_at|date:"d-m-Y H:i" }}</p>
+                    <p><span class="font-semibold">Created By:</span> {{ lead.created_by.get_full_name|default:"System" }}</p>
+                </div>
+
+                <div class="mt-4">
+                    <h3 class="font-semibold text-lg mb-2">Notes</h3>
+                    <div class="bg-gray-50 p-4 rounded">
+                        {% if lead.notes %}
+                            {{ lead.notes|linebreaks }}
+                        {% else %}
+                            <p class="text-gray-500">No notes available for this lead.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+<!-- Auto-submit filters and tab persistence -->
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+    // Auto-submit filters
     document.querySelectorAll(".auto-submit").forEach(el => {
         el.addEventListener("change", function() {
-            window.location.hash = "quotations"; // keep on quotations tab
-            document.getElementById("filter-form").submit();
+            const form = this.closest('form');
+            if (form.id === 'quotation-filter-form') {
+                window.location.hash = "quotations";
+            } else if (form.id === 'lead-filter-form') {
+                window.location.hash = "leads";
+            }
+            form.submit();
         });
     });
+
+    // Persist tab on page load
+    if (window.location.hash) {
+        const tab = window.location.hash.replace('#', '');
+        if (['salespeople', 'quotations', 'leads'].includes(tab)) {
+            document.querySelector(`[x-data]`).__x.$data.activeTab = tab;
+        }
+    }
 });
 </script>
 

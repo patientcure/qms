@@ -64,18 +64,37 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
+        # Salespeople data
         context['salespeople'] = User.objects.filter(role=Roles.SALESPERSON).annotate(
             quotation_count=Count('quotations', distinct=True),
             lead_count=Count('leads', distinct=True)
         )
 
+        # Quotations data
         context['status_choices'] = QuotationStatus.choices
         context['all_customers'] = Customer.objects.all()
         context['salespeople_list'] = User.objects.filter(role=Roles.SALESPERSON)
 
-        context['all_leads'] = Lead.objects.select_related('customer', 'assigned_to').all()
-
-        context['products'] = Product.objects.filter(active=True)
+        # Leads data
+        leads_queryset = Lead.objects.select_related('customer', 'assigned_to')
+        
+        # Apply filters to leads if they exist
+        lead_status = self.request.GET.get('lead_status')
+        lead_assigned_to = self.request.GET.get('lead_assigned_to')
+        lead_date_from = self.request.GET.get('lead_from')
+        lead_date_to = self.request.GET.get('lead_to')
+        
+        if lead_status:
+            leads_queryset = leads_queryset.filter(status=lead_status)
+        if lead_assigned_to:
+            leads_queryset = leads_queryset.filter(assigned_to_id=lead_assigned_to)
+        if lead_date_from:
+            leads_queryset = leads_queryset.filter(created_at__date__gte=lead_date_from)
+        if lead_date_to:
+            leads_queryset = leads_queryset.filter(created_at__date__lte=lead_date_to)
+            
+        context['leads'] = leads_queryset
+        context['lead_status_choices'] = LeadStatus.choices
 
         return context
 
@@ -141,11 +160,13 @@ class LeadMixin(LoginRequiredMixin, UserPassesTestMixin):
         return self.request.user.role == Roles.ADMIN
 
 
-class CreateLeadView(LeadMixin, CreateView):
-    """Create a new lead"""
+class CreateLeadView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Lead
     form_class = LeadForm
     template_name = "accounts/lead_form.html"
+    
+    def test_func(self):
+        return self.request.user.role == Roles.ADMIN
     
     def form_valid(self, form):
         lead = form.save(commit=False)
