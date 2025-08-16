@@ -109,8 +109,6 @@
                 <p><span class="font-semibold">Currency:</span> {{ q.currency }}</p>
                 <p><span class="font-semibold">Subtotal:</span> {{ q.subtotal }}</p>
                 <p><span class="font-semibold">Tax Total:</span> {{ q.tax_total }}</p>
-                <p><span class="font-semibold">Total:</span> {{ q.total }}</p>
-                <p><span class="font-semibold">Terms:</span> {{ q.terms.name|default:"N/A" }}</p>
                 <p><span class="font-semibold">Email Template:</span> {{ q.email_template.name|default:"N/A" }}</p>
                 <p><span class="font-semibold">Google Drive Link:</span> 
                     {% if q.drive_web_view_link %}

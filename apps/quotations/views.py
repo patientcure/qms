@@ -28,32 +28,55 @@ from .choices import LeadStatus, QuotationStatus, ActivityAction
 from .utils import generate_next_quotation_number, send_and_archive_quotation
 
 
-# ========== Admin Views ==========
-class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
-    """Admin dashboard with overview of sales team, leads, and quotations"""
+class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     template_name = "accounts/admin_dashboard.html"
-    
+    model = Quotation
+    paginate_by = 25
+    context_object_name = 'quotations'
+
     def test_func(self):
         return self.request.user.role == Roles.ADMIN
-    
+
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related(
+            'customer', 'assigned_to', 'terms'
+        ).prefetch_related('items')
+
+        status = self.request.GET.get('status')
+        customer = self.request.GET.get('customer')
+        assigned_to = self.request.GET.get('assigned_to')
+        date_from = self.request.GET.get('from')
+        date_to = self.request.GET.get('to')
+
+        if status:
+            queryset = queryset.filter(status=status)
+        if customer:
+            queryset = queryset.filter(customer_id=customer)
+        if assigned_to:
+            queryset = queryset.filter(assigned_to_id=assigned_to)
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+
+        return queryset.order_by('-created_at')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Sales Team Management
+
         context['salespeople'] = User.objects.filter(role=Roles.SALESPERSON).annotate(
             quotation_count=Count('quotations', distinct=True),
             lead_count=Count('leads', distinct=True)
         )
-        
-        # Quotation Creation
-        context['customers'] = Customer.objects.all()
-        context['products'] = Product.objects.filter(active=True)
-        context['terms'] = TermsAndConditions.objects.all()
-        context['email_templates'] = EmailTemplate.objects.all()
-        
-        # Lead Management
+
+        context['status_choices'] = QuotationStatus.choices
+        context['all_customers'] = Customer.objects.all()
+        context['salespeople_list'] = User.objects.filter(role=Roles.SALESPERSON)
+
         context['all_leads'] = Lead.objects.select_related('customer', 'assigned_to').all()
-        
+
+        context['products'] = Product.objects.filter(active=True)
+
         return context
 
 
@@ -433,43 +456,16 @@ class GetProductDetailsView(QuotationMixin, View):
             })
         return JsonResponse({'error': 'Product not found'}, status=404)
 
-class AdminQuotationListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    template_name = "admin_dashboard.html"
+class QuotationEditView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Quotation
-    paginate_by = 25
-    context_object_name = 'quotations'
+    form_class = QuotationForm
+    template_name = "quotations/edit.html"
+    pk_url_kwarg = "pk"
 
     def test_func(self):
         return self.request.user.role == Roles.ADMIN
 
-    def get_queryset(self):
-        queryset = super().get_queryset().select_related(
-            'customer', 'assigned_to', 'terms'
-        ).prefetch_related('items')
-        
-        # Apply filters
-        status = self.request.GET.get('status')
-        customer = self.request.GET.get('customer')
-        assigned_to = self.request.GET.get('assigned_to')
-        date_from = self.request.GET.get('from')
-        date_to = self.request.GET.get('to')
-        
-        if status:
-            queryset = queryset.filter(status=status)
-        if customer:
-            queryset = queryset.filter(customer_id=customer)
-        if assigned_to:
-            queryset = queryset.filter(assigned_to_id=assigned_to)
-        if date_from:
-            queryset = queryset.filter(created_at__date__gte=date_from)
-        if date_to:
-            queryset = queryset.filter(created_at__date__lte=date_to)
-            
-        return queryset.order_by('-created_at')
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['status_choices'] = QuotationStatus.choices
-        context['all_customers'] = Customer.objects.all()
-        context['salespeople'] = User.objects.filter(role=Roles.SALESPERSON)
-        return context
+    def form_valid(self, form):
+        quotation = form.save()
+        messages.success(self.request, f"Quotation {quotation.quotation_number} updated successfully")
+        return redirect("quotations:admin_dashboard")

@@ -36,6 +36,8 @@ urlpatterns = [
     
     # Quotation
     path('quotations/create/', AdminQuotationCreateView.as_view(), name='admin_create_quotation'),
+    path("quotations/<int:pk>/edit/", views.QuotationEditView.as_view(), name="edit_quotation"),
+
     
     # AJAX
     path('ajax/products/<int:product_id>/', GetProductDetailsView.as_view(), name='get_product_details'),
