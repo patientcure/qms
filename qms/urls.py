@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path,include
 from apps.quotations.views_preview import StaticHTMLPreview
+from apps.accounts.views_preview import StaticHTMLPreview as AccountsStaticHTMLPreview
 
 
 urlpatterns = [
@@ -24,5 +25,6 @@ urlpatterns = [
     path("quotations/", include("apps.quotations.urls", namespace="quotations")),
     path("accounts/", include("apps.accounts.urls", namespace="accounts")),
     path('preview/<path:template_name>/', StaticHTMLPreview.as_view(), name="static_preview"),
+    path('accounts/<path:template_name>/',AccountsStaticHTMLPreview.as_view(), name="accounts_static_preview"),
 
 ]

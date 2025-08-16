@@ -15,7 +15,4 @@ urlpatterns = [
     path("ajax/customer/new/", views.CustomerCreateAjaxView.as_view(), name="ajax_customer_new"),
     path("ajax/product/new/", views.ProductCreateAjaxView.as_view(), name="ajax_product_new"),
     path('ajax/live-preview/', views.QuotationLivePreviewView.as_view(), name='ajax_live_preview'),
-    path('ajax/customer/new/', views.CustomerCreateAjaxView.as_view(), name='ajax_customer_new'),
-    path('ajax/product/new/', views.ProductCreateAjaxView.as_view(), name='ajax_product_new'),
-
 ]

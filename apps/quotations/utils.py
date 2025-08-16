@@ -21,3 +21,15 @@ def generate_next_quotation_number() -> str:
         last_seq = 0
     next_seq = str(last_seq + 1).zfill(4)
     return f"{base}{next_seq}"
+
+def send_and_archive_quotation(quotation):
+    """
+    Generate PDF, send via SendGrid, upload to Drive, update status & log activity.
+    """
+    # TODO: Implement actual PDF generation, SendGrid, Google Drive upload
+    print(f"Sending quotation {quotation.quotation_number} to {quotation.customer.email}")
+    quotation.status = "MAIL_SENT"
+    quotation.emailed_at = timezone.now()
+    quotation.save()
+    # Log in EmailLog or ActivityLog if needed
+    return True
