@@ -1,41 +1,219 @@
-from decimal import Decimal
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
-from django.db.models import Q
-from django.http import JsonResponse, HttpResponseBadRequest
-from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.views.generic import TemplateView, ListView, CreateView, UpdateView
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-from django.utils import timezone
+from django.db.models import Count, Q
+from django.contrib import messages
 from django.views import View
+from django.http import JsonResponse
+from django.db import transaction
+from django.utils import timezone
+from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from django.views.generic import ListView, TemplateView
 from django.forms.models import model_to_dict
-from django.template.loader import render_to_string
-
-from .forms import (
-    QuotationForm,
-    QuotationItemFormSet,
-    CustomerForm,
-    ProductForm
-)
+from decimal import Decimal
+from apps.accounts.models import User, Roles
 from .models import (
-    Quotation,
-    Customer,
-    Product,
-    TermsAndConditions,
-    EmailTemplate,
-    CompanyProfile,
-    ActivityLog,
-    EmailLog,
-    Lead
+    Quotation, Lead, Customer, Product,
+    TermsAndConditions, EmailTemplate,
+    CompanyProfile, ActivityLog, EmailLog
 )
-from .choices import QuotationStatus, ActivityAction
+from .forms import (
+    SalespersonForm, LeadForm,
+    QuotationForm, QuotationItemFormSet,
+    CustomerForm, ProductForm
+)
+from .choices import LeadStatus, QuotationStatus, ActivityAction
 from .utils import generate_next_quotation_number, send_and_archive_quotation
 
 
-# ---------- Create Quotation ----------
-class QuotationCreateView(LoginRequiredMixin, View):
+# ========== Admin Views ==========
+class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """Admin dashboard with overview of sales team, leads, and quotations"""
+    template_name = "accounts/admin_dashboard.html"
+    
+    def test_func(self):
+        return self.request.user.role == Roles.ADMIN
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Sales Team Management
+        context['salespeople'] = User.objects.filter(role=Roles.SALESPERSON).annotate(
+            quotation_count=Count('quotations', distinct=True),
+            lead_count=Count('leads', distinct=True)
+        )
+        
+        # Quotation Creation
+        context['customers'] = Customer.objects.all()
+        context['products'] = Product.objects.filter(active=True)
+        context['terms'] = TermsAndConditions.objects.all()
+        context['email_templates'] = EmailTemplate.objects.all()
+        
+        # Lead Management
+        context['all_leads'] = Lead.objects.select_related('customer', 'assigned_to').all()
+        
+        return context
+
+
+class SalespersonMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Mixin for salesperson-related views"""
+    def test_func(self):
+        return self.request.user.role == Roles.ADMIN
+
+
+class CreateSalespersonView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    model = User
+    form_class = SalespersonForm
+    template_name = "accounts/salesperson_form.html"
+    
+    def test_func(self):
+        return self.request.user.role == Roles.ADMIN
+    
+    def form_valid(self, form):
+        user = form.save(commit=False)
+        user.role = Roles.SALESPERSON
+        
+        if form.cleaned_data.get('password1'):
+            user.set_password(form.cleaned_data['password1'])
+        
+        user.save()
+        messages.success(self.request, f"Salesperson {user.get_full_name()} created successfully")
+        return redirect('quotations:admin_dashboard')
+
+class EditSalespersonView(SalespersonMixin, UpdateView):
+    """Edit an existing salesperson account"""
+    model = User
+    form_class = SalespersonForm
+    template_name = "accounts/salesperson_form.html"
+    pk_url_kwarg = 'user_id'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['password_required'] = False
+        return kwargs
+    
+    def form_valid(self, form):
+        user = form.save()
+        messages.success(self.request, f"Salesperson {user.get_full_name()} updated successfully")
+        return redirect('quotations:admin_dashboard')
+
+
+class ToggleSalespersonStatusView(SalespersonMixin, View):
+    """Activate/deactivate a salesperson account"""
+    def post(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id, role=Roles.SALESPERSON)
+        user.is_active = not user.is_active
+        user.save()
+        
+        action = "activated" if user.is_active else "deactivated"
+        messages.success(request, f"Salesperson {user.get_full_name()} {action} successfully")
+        return redirect('quotations:admin_dashboard')
+
+
+class LeadMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Mixin for lead-related views"""
+    def test_func(self):
+        return self.request.user.role == Roles.ADMIN
+
+
+class CreateLeadView(LeadMixin, CreateView):
+    """Create a new lead"""
+    model = Lead
+    form_class = LeadForm
+    template_name = "accounts/lead_form.html"
+    
+    def form_valid(self, form):
+        lead = form.save(commit=False)
+        lead.created_by = self.request.user
+        lead.save()
+        messages.success(self.request, "Lead created successfully")
+        return redirect('quotations:admin_dashboard')
+
+
+class EditLeadView(LeadMixin, UpdateView):
+    """Edit an existing lead"""
+    model = Lead
+    form_class = LeadForm
+    template_name = "accounts/lead_form.html"
+    pk_url_kwarg = 'lead_id'
+    
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, "Lead updated successfully")
+        return redirect('quotations:admin_dashboard')
+
+
+class AssignLeadView(LeadMixin, View):
+    """Assign a lead to a salesperson"""
+    def post(self, request, lead_id):
+        lead = get_object_or_404(Lead, pk=lead_id)
+        assigned_to_id = request.POST.get('assigned_to')
+        
+        if assigned_to_id:
+            salesperson = get_object_or_404(User, pk=assigned_to_id, role=Roles.SALESPERSON)
+            lead.assigned_to = salesperson
+            lead.save()
+            messages.success(request, f"Lead assigned to {salesperson.get_full_name()}")
+        else:
+            lead.assigned_to = None
+            lead.save()
+            messages.success(request, "Lead assignment removed")
+            
+        return redirect('quotations:admin_dashboard')
+
+
+# ========== Quotation Views ==========
+class QuotationMixin(LoginRequiredMixin):
+    """Mixin for quotation-related views"""
+    pass
+
+
+class AdminQuotationCreateView(QuotationMixin, UserPassesTestMixin, View):
+    """Admin view for creating quotations"""
+    template_name = "quotations/create.html"
+    
+    def test_func(self):
+        return self.request.user.role == Roles.ADMIN
+    
+    def get(self, request):
+        form = QuotationForm()
+        formset = QuotationItemFormSet()
+        return render(request, self.template_name, {
+            "form": form, 
+            "formset": formset,
+            "salespeople": User.objects.filter(role=Roles.SALESPERSON)
+        })
+
+    @transaction.atomic
+    def post(self, request):
+        form = QuotationForm(request.POST)
+        formset = QuotationItemFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            quotation = form.save(commit=False)
+            
+            if not quotation.assigned_to:
+                quotation.auto_assign_if_needed()
+                
+            quotation.save()
+            formset.instance = quotation
+            formset.save()
+            quotation.recalculate_totals()
+            
+            messages.success(request, f"Quotation {quotation.quotation_number} created successfully")
+            return redirect('quotations:admin_dashboard')
+            
+        return render(request, self.template_name, {
+            "form": form, 
+            "formset": formset,
+            "salespeople": User.objects.filter(role=Roles.SALESPERSON)
+        })
+
+
+class QuotationCreateView(QuotationMixin, View):
+    """Create a new quotation"""
     template_name = "quotations/create.html"
 
     def get(self, request):
@@ -49,29 +227,39 @@ class QuotationCreateView(LoginRequiredMixin, View):
         formset = QuotationItemFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
             quotation = form.save(commit=False)
-            quotation.save()  # triggers number + totals on save
+            quotation.save()
             formset.instance = quotation
             formset.save()
-            # update totals and auto-assign
             quotation.recalculate_totals()
             quotation.auto_assign_if_needed()
-            ActivityLog.log(actor=request.user, action=ActivityAction.QUOTATION_CREATED, entity=quotation, message="Created via UI")
+            ActivityLog.log(
+                actor=request.user, 
+                action=ActivityAction.QUOTATION_CREATED, 
+                entity=quotation, 
+                message="Created via UI"
+            )
             return redirect(reverse("quotations.create") + f"?q={quotation.pk}")
         return render(request, self.template_name, {"form": form, "formset": formset})
 
 
-# ---------- Quotation HTML Preview ----------
-class QuotationPreviewView(LoginRequiredMixin, View):
-    """Returns the same HTML used by the PDF renderer for right-pane preview."""
+class QuotationPreviewView(QuotationMixin, View):
+    """Preview quotation HTML"""
     def get(self, request, pk):
-        q = get_object_or_404(Quotation.objects.select_related("customer", "terms"), pk=pk)
+        q = get_object_or_404(
+            Quotation.objects.select_related("customer", "terms"), 
+            pk=pk
+        )
         items = q.items.select_related("product").all()
         company = CompanyProfile.objects.first()
-        return render(request, "pdf/quotation.html", {"quotation": q, "items": items, "company": company})
+        return render(
+            request, 
+            "pdf/quotation.html", 
+            {"quotation": q, "items": items, "company": company}
+        )
 
 
-# ---------- Submit & Send ----------
-class QuotationSendView(LoginRequiredMixin, View):
+class QuotationSendView(QuotationMixin, View):
+    """Send quotation to customer"""
     def post(self, request, pk):
         quotation = get_object_or_404(Quotation, pk=pk)
         try:
@@ -79,14 +267,15 @@ class QuotationSendView(LoginRequiredMixin, View):
             return JsonResponse({
                 "ok": True,
                 "status": quotation.status,
-                "emailed_at": timezone.localtime(quotation.emailed_at).strftime("%Y-%m-%d %H:%M") if quotation.emailed_at else ""
+                "emailed_at": timezone.localtime(quotation.emailed_at).strftime("%Y-%m-%d %H:%M") 
+                if quotation.emailed_at else ""
             })
         except Exception as e:
             return JsonResponse({"ok": False, "error": str(e)}, status=400)
 
 
-# ---------- Quotation List + Filters ----------
-class QuotationListView(LoginRequiredMixin, ListView):
+class QuotationListView(QuotationMixin, ListView):
+    """List all quotations with filters"""
     template_name = "quotations/list.html"
     model = Quotation
     paginate_by = 20
@@ -122,8 +311,8 @@ class QuotationListView(LoginRequiredMixin, ListView):
         return context
 
 
-# ---------- CSV Export ----------
-class QuotationCSVExportView(LoginRequiredMixin, View):
+class QuotationCSVExportView(QuotationMixin, View):
+    """Export quotations to CSV"""
     def get(self, request):
         view = QuotationListView()
         view.request = request
@@ -132,15 +321,22 @@ class QuotationCSVExportView(LoginRequiredMixin, View):
         return export_quotations_csv(queryset)
 
 
-class SalespersonDashboardView(LoginRequiredMixin, TemplateView):
+# ========== Salesperson Dashboard ==========
+class SalespersonDashboardView(QuotationMixin, TemplateView):
+    """Dashboard for salespersons"""
     template_name = "accounts/salesperson_dashboard.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
 
-        ctx['quotations'] = Quotation.objects.filter(assigned_to=self.request.user).order_by('-created_at')
-        ctx['leads'] = Lead.objects.filter(assigned_to=user).order_by('-created_at')
+        ctx['quotations'] = Quotation.objects.filter(
+            assigned_to=user
+        ).order_by('-created_at')
+        
+        ctx['leads'] = Lead.objects.filter(
+            assigned_to=user
+        ).order_by('-created_at')
 
         ctx['upcoming_followups'] = ctx['quotations'].filter(
             follow_up_date__isnull=False,
@@ -157,9 +353,9 @@ class SalespersonDashboardView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-
-# ---------- AJAX: Create Customer ----------
-class CustomerCreateAjaxView(LoginRequiredMixin, View):
+# ========== AJAX Views ==========
+class CustomerCreateAjaxView(QuotationMixin, View):
+    """AJAX endpoint for creating customers"""
     def post(self, request):
         form = CustomerForm(request.POST)
         if form.is_valid():
@@ -168,8 +364,8 @@ class CustomerCreateAjaxView(LoginRequiredMixin, View):
         return JsonResponse({"errors": form.errors}, status=400)
 
 
-# ---------- AJAX: Create Product ----------
-class ProductCreateAjaxView(LoginRequiredMixin, View):
+class ProductCreateAjaxView(QuotationMixin, View):
+    """AJAX endpoint for creating products"""
     def post(self, request):
         form = ProductForm(request.POST)
         if form.is_valid():
@@ -178,9 +374,9 @@ class ProductCreateAjaxView(LoginRequiredMixin, View):
         return JsonResponse({"errors": form.errors}, status=400)
 
 
-# ---------- Live Quotation Preview (Form Data) ----------
 @method_decorator(csrf_exempt, name='dispatch')
 class QuotationLivePreviewView(View):
+    """Live preview of quotation"""
     def post(self, request, *args, **kwargs):
         try:
             context = self._build_preview_context(request.POST)
@@ -224,3 +420,56 @@ class QuotationLivePreviewView(View):
             'company': CompanyProfile.objects.first(),
             'items': items,
         }
+
+
+class GetProductDetailsView(QuotationMixin, View):
+    """AJAX endpoint for product details"""
+    def get(self, request, product_id):
+        product = Product.objects.filter(pk=product_id).first()
+        if product:
+            return JsonResponse({
+                'unit_price': str(product.unit_price),
+                'tax_rate': str(product.tax_rate)
+            })
+        return JsonResponse({'error': 'Product not found'}, status=404)
+
+class AdminQuotationListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    template_name = "admin_dashboard.html"
+    model = Quotation
+    paginate_by = 25
+    context_object_name = 'quotations'
+
+    def test_func(self):
+        return self.request.user.role == Roles.ADMIN
+
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related(
+            'customer', 'assigned_to', 'terms'
+        ).prefetch_related('items')
+        
+        # Apply filters
+        status = self.request.GET.get('status')
+        customer = self.request.GET.get('customer')
+        assigned_to = self.request.GET.get('assigned_to')
+        date_from = self.request.GET.get('from')
+        date_to = self.request.GET.get('to')
+        
+        if status:
+            queryset = queryset.filter(status=status)
+        if customer:
+            queryset = queryset.filter(customer_id=customer)
+        if assigned_to:
+            queryset = queryset.filter(assigned_to_id=assigned_to)
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+            
+        return queryset.order_by('-created_at')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['status_choices'] = QuotationStatus.choices
+        context['all_customers'] = Customer.objects.all()
+        context['salespeople'] = User.objects.filter(role=Roles.SALESPERSON)
+        return context

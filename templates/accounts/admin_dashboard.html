@@ -1,57 +1,609 @@
 {% extends "base.html" %}
-
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-<div class="container mx-auto p-6">
-    <h1 class="text-3xl font-bold mb-6">Admin Dashboard</h1>
+<div class="p-6 bg-gray-50 min-h-screen" x-data="{ 
+    openModal: null,
+    activeTab: 'salespeople',
+    exportStartDate: '',
+    exportEndDate: '',
+    exportProduct: ''
+}">
 
-    <!-- Add Salesperson Button -->
-    <div class="mb-4">
-        <a href="{% url 'accounts:create_salesperson' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-            Add New Salesperson
-        </a>
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
+            <p class="text-gray-600">Manage sales team and quotations</p>
+        </div>
+        <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg">
+            <span class="font-medium">Today:</span> {% now "F j, Y" %}
+        </div>
     </div>
 
-    <!-- Salespersons Table -->
-    <div class="overflow-x-auto">
-        <table class="min-w-full bg-white rounded shadow">
-            <thead>
-                <tr class="bg-gray-100 text-left">
-                    <th class="py-2 px-4">Username</th>
-                    <th class="py-2 px-4">Email</th>
-                    <th class="py-2 px-4">Status</th>
-                    <th class="py-2 px-4">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for salesperson in salespersons %}
-                <tr class="border-b">
-                    <td class="py-2 px-4">{{ salesperson.username }}</td>
-                    <td class="py-2 px-4">{{ salesperson.email }}</td>
-                    <td class="py-2 px-4">
-                        {% if salesperson.is_active %}
-                            <span class="text-green-600 font-semibold">Active</span>
-                        {% else %}
-                            <span class="text-red-600 font-semibold">Inactive</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-2 px-4">
-                        <a href="{% url 'accounts:toggle_salesperson' salesperson.id %}"
-                           class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">
-                           {% if salesperson.is_active %} Disable {% else %} Enable {% endif %}
+    <!-- Tabs -->
+    <div class="mb-6 border-b border-gray-200">
+        <nav class="-mb-px flex space-x-8">
+            <button @click="activeTab = 'salespeople'" 
+                :class="activeTab === 'salespeople' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                Sales Team
+            </button>
+            <button @click="activeTab = 'quotations'" 
+                :class="activeTab === 'quotations' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                Quotations
+            </button>
+            <button @click="activeTab = 'leads'" 
+                :class="activeTab === 'leads' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                Manage Leads
+            </button>
+            <button @click="activeTab = 'exports'" 
+                :class="activeTab === 'exports' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                Data Exports
+            </button>
+        </nav>
+    </div>
+
+    <!-- Sales Team Management -->
+    <div x-show="activeTab === 'salespeople'" class="space-y-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-gray-800">Sales Team Management</h2>
+            <a href="{% url 'quotations:create_salesperson' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+                Add New Salesperson
+            </a>
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full table-auto">
+                <thead class="bg-gray-100 text-gray-600">
+                    <tr>
+                        <th class="px-6 py-3 text-left">Name</th>
+                        <th class="px-6 py-3 text-left">Email</th>
+                        <th class="px-6 py-3 text-left">Active Quotations</th>
+                        <th class="px-6 py-3 text-left">Active Leads</th>
+                        <th class="px-6 py-3 text-left">Status</th>
+                        <th class="px-6 py-3 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for user in salespeople %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">{{ user.get_full_name }}</td>
+                        <td class="px-6 py-4">{{ user.email }}</td>
+                        <td class="px-6 py-4">{{ user.quotations.count }}</td>
+                        <td class="px-6 py-4">{{ user.leads.count }}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium {% if user.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {% if user.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 space-x-2">
+                            <a href="{% url 'quotations:edit_salesperson' user.pk %}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Edit</a>
+                            <form method="POST" action="{% url 'quotations:toggle_salesperson_status' user.pk %}" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="text-sm font-medium {% if user.is_active %}text-orange-600 hover:text-orange-800{% else %}text-green-600 hover:text-green-800{% endif %}">
+                                    {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">No salespeople found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create Quotation -->
+    <!-- Quotations Tab -->
+<!-- Quotations Tab -->
+<div x-show="activeTab === 'quotations'" class="space-y-6" x-data="{ 
+    openModal: null,
+    statusFilter: '',
+    customerFilter: '',
+    assignedToFilter: '',
+    dateFrom: '',
+    dateTo: ''
+}">
+    <!-- Header with Create Button and Filters -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <h2 class="text-xl font-semibold text-gray-800">All Quotations</h2>
+        
+        <div class="flex flex-col sm:flex-row gap-3">
+            <a href="{% url 'quotations:create' %}" 
+               class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center whitespace-nowrap">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Create Quotation
+            </a>
+            
+            <a href="{% url 'quotations:export_csv' %}?status={{ request.GET.status }}&customer={{ request.GET.customer }}&assigned_to={{ request.GET.assigned_to }}&from={{ request.GET.from }}&to={{ request.GET.to }}" 
+               class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center whitespace-nowrap">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Export CSV
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white p-4 rounded-lg shadow">
+        <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <!-- Status Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select name="status" x-model="statusFilter" class="w-full border rounded px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Statuses</option>
+                    {% for key, value in status_choices %}
+                    <option value="{{ key }}" {% if request.GET.status == key|stringformat:"s" %}selected{% endif %}>{{ value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Customer Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                <select name="customer" x-model="customerFilter" class="w-full border rounded px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Customers</option>
+                    {% for customer in all_customers %}
+                    <option value="{{ customer.id }}" {% if request.GET.customer == customer.id|stringformat:"s" %}selected{% endif %}>{{ customer.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Assigned To Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                <select name="assigned_to" x-model="assignedToFilter" class="w-full border rounded px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Salespeople</option>
+                    {% for user in salespeople %}
+                    <option value="{{ user.id }}" {% if request.GET.assigned_to == user.id|stringformat:"s" %}selected{% endif %}>{{ user.get_full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Date Range Filters -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                <input type="date" name="from" x-model="dateFrom" value="{{ request.GET.from }}" class="w-full border rounded px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                <input type="date" name="to" x-model="dateTo" value="{{ request.GET.to }}" class="w-full border rounded px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <!-- Filter Buttons -->
+            <div class="md:col-span-2 lg:col-span-5 flex justify-end space-x-2">
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
+                    Apply Filters
+                </button>
+                <a href="." class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">
+                    Clear Filters
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Quotations Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full table-auto">
+                <thead class="bg-gray-100 text-gray-600">
+                    <tr>
+                        <th class="px-6 py-3 text-left">#</th>
+                        <th class="px-6 py-3 text-left">Quotation #</th>
+                        <th class="px-6 py-3 text-left">Customer</th>
+                        <th class="px-6 py-3 text-left">Assigned To</th>
+                        <th class="px-6 py-3 text-left">Status</th>
+                        <th class="px-6 py-3 text-left">Total</th>
+                        <th class="px-6 py-3 text-left">Created</th>
+                        <th class="px-6 py-3 text-left">Follow-up</th>
+                        <th class="px-6 py-3 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for q in quotations %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">{{ forloop.counter }}</td>
+                        <td class="px-6 py-4 font-medium text-blue-600">{{ q.quotation_number }}</td>
+                        <td class="px-6 py-4">{{ q.customer.name }}</td>
+                        <td class="px-6 py-4">
+                            {% if q.assigned_to %}
+                                {{ q.assigned_to.get_full_name }}
+                            {% else %}
+                                <span class="text-gray-400">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 rounded-full text-xs 
+                                {% if q.status == 'draft' %}bg-gray-100 text-gray-800
+                                {% elif q.status == 'sent' %}bg-blue-100 text-blue-800
+                                {% elif q.status == 'approved' %}bg-green-100 text-green-800
+                                {% elif q.status == 'rejected' %}bg-red-100 text-red-800
+                                {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                {{ q.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 font-medium">{{ q.currency }} {{ q.total }}</td>
+                        <td class="px-6 py-4">{{ q.created_at|date:"d-m-Y" }}</td>
+                        <td class="px-6 py-4">
+                            {% if q.follow_up_date %}
+                                {{ q.follow_up_date|date:"d-m-Y" }}
+                            {% else %}
+                                <span class="text-gray-400">Not set</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 space-x-2 whitespace-nowrap">
+                            <button @click="openModal = {{ q.id }}" 
+                                    class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                View
+                            </button>
+                            <a href="{% url 'quotations:edit' q.pk %}" 
+                               class="text-green-600 hover:text-green-800 text-sm font-medium">
+                                Edit
+                            </a>
+                            <a href="{% url 'quotations:send' q.pk %}" 
+                               class="text-purple-600 hover:text-purple-800 text-sm font-medium">
+                                Send
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="px-6 py-4 text-center text-gray-500">
+                            No quotations found matching your filters
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="px-6 py-4 border-t border-gray-200">
+            <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-700">
+                    Showing <span class="font-medium">{{ page_obj.start_index }}</span> to 
+                    <span class="font-medium">{{ page_obj.end_index }}</span> of 
+                    <span class="font-medium">{{ paginator.count }}</span> results
+                </div>
+                <div class="flex space-x-2">
+                    {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            Previous
                         </a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" class="text-center py-4 text-gray-500">
-                        No salespersons found.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <span class="px-3 py-1 border border-blue-500 bg-blue-500 text-white rounded-md text-sm font-medium">
+                                {{ num }}
+                            </span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <a href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                               class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                {{ num }}
+                            </a>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            Next
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
+
+    <!-- Quotation Detail Modals -->
+    {% for q in quotations %}
+    <div x-show="openModal === {{ q.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+        <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-3/4 lg:w-2/3 p-6 relative max-h-[90vh] overflow-y-auto">
+            <button @click="openModal = null" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 class="text-2xl font-bold">Quotation #{{ q.quotation_number }}</h2>
+                    <p class="text-gray-600">{{ q.customer.name }}</p>
+                </div>
+                <div class="flex space-x-2">
+                    <span class="px-3 py-1 rounded-full text-xs font-medium 
+                        {% if q.status == 'draft' %}bg-gray-100 text-gray-800
+                        {% elif q.status == 'sent' %}bg-blue-100 text-blue-800
+                        {% elif q.status == 'approved' %}bg-green-100 text-green-800
+                        {% elif q.status == 'rejected' %}bg-red-100 text-red-800
+                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                        {{ q.get_status_display }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="space-y-2">
+                    <h3 class="text-lg font-semibold border-b pb-2">Details</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <p class="font-medium">Created:</p>
+                        <p>{{ q.created_at|date:"d M Y" }}</p>
+                        
+                        <p class="font-medium">Assigned To:</p>
+                        <p>{{ q.assigned_to.get_full_name|default:"Unassigned" }}</p>
+                        
+                        <p class="font-medium">Follow-up:</p>
+                        <p>{{ q.follow_up_date|date:"d M Y"|default:"Not set" }}</p>
+                        
+                        <p class="font-medium">Currency:</p>
+                        <p>{{ q.currency }}</p>
+                    </div>
+                </div>
+                
+                <div class="space-y-2">
+                    <h3 class="text-lg font-semibold border-b pb-2">Totals</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <p class="font-medium">Subtotal:</p>
+                        <p>{{ q.currency }} {{ q.subtotal }}</p>
+                        
+                        <p class="font-medium">Tax:</p>
+                        <p>{{ q.currency }} {{ q.tax_total }}</p>
+                        
+                        <p class="font-medium">Total:</p>
+                        <p class="font-bold">{{ q.currency }} {{ q.total }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quotation Items -->
+            <h3 class="text-lg font-semibold border-b pb-2 mb-4">Items</h3>
+            {% if q.items.exists %}
+            <div class="overflow-x-auto mb-6">
+                <table class="w-full table-auto border border-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-2 border text-left">#</th>
+                            <th class="px-4 py-2 border text-left">Item</th>
+                            <th class="px-4 py-2 border text-left">Description</th>
+                            <th class="px-4 py-2 border text-left">Qty</th>
+                            <th class="px-4 py-2 border text-left">Unit Price</th>
+                            <th class="px-4 py-2 border text-left">Tax</th>
+                            <th class="px-4 py-2 border text-left">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in q.items.all %}
+                        <tr>
+                            <td class="px-4 py-2 border">{{ forloop.counter }}</td>
+                            <td class="px-4 py-2 border">{{ item.name }}</td>
+                            <td class="px-4 py-2 border">{{ item.description|default:"-" }}</td>
+                            <td class="px-4 py-2 border">{{ item.quantity }}</td>
+                            <td class="px-4 py-2 border">{{ q.currency }} {{ item.unit_price }}</td>
+                            <td class="px-4 py-2 border">{{ item.tax_rate }}%</td>
+                            <td class="px-4 py-2 border">{{ q.currency }} {{ item.total|default:item.quantity|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="text-gray-500 mb-6">No items added to this quotation.</p>
+            {% endif %}
+
+            <!-- Additional Information -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% if q.terms %}
+                <div class="space-y-2">
+                    <h3 class="text-lg font-semibold border-b pb-2">Terms & Conditions</h3>
+                    <div class="prose prose-sm max-w-none">
+                        {{ q.terms.content_html|safe }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if q.notes %}
+                <div class="space-y-2">
+                    <h3 class="text-lg font-semibold border-b pb-2">Notes</h3>
+                    <p class="whitespace-pre-line">{{ q.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
 </div>
+
+    <!-- Manage Leads -->
+    <div x-show="activeTab === 'leads'" class="space-y-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-gray-800">Lead Management</h2>
+            <a href="{% url 'quotations:create_lead' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+                Create New Lead
+            </a>
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full table-auto">
+                <thead class="bg-gray-100 text-gray-600">
+                    <tr>
+                        <th class="px-6 py-3 text-left">Customer</th>
+                        <th class="px-6 py-3 text-left">Email</th>
+                        <th class="px-6 py-3 text-left">Status</th>
+                        <th class="px-6 py-3 text-left">Assigned To</th>
+                        <th class="px-6 py-3 text-left">Follow-up</th>
+                        <th class="px-6 py-3 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for lead in all_leads %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">{{ lead.customer.name }}</td>
+                        <td class="px-6 py-4">{{ lead.customer.email }}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium 
+                                {% if lead.status == 'PENDING' %}bg-yellow-100 text-yellow-800
+                                {% elif lead.status == 'IN_PROGRESS' %}bg-blue-100 text-blue-800
+                                {% elif lead.status == 'CONVERTED' %}bg-green-100 text-green-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ lead.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if lead.assigned_to %}
+                                {{ lead.assigned_to.get_full_name }}
+                            {% else %}
+                                <span class="text-gray-400">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if lead.follow_up_date %}
+                                {{ lead.follow_up_date|date:"d-m-Y" }}
+                            {% else %}
+                                <span class="text-gray-400">Not set</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 space-x-2">
+                            <a href="{% url 'quotations:edit_lead' lead.pk %}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Edit</a>
+                            <form method="POST" action="{% url 'accounts:assign_lead' lead.pk %}" class="inline">
+                                {% csrf_token %}
+                                <select name="assigned_to" onchange="this.form.submit()" class="border rounded px-2 py-1 text-xs">
+                                    <option value="">Assign to...</option>
+                                    {% for user in salespeople %}
+                                    <option value="{{ user.id }}" {% if lead.assigned_to == user %}selected{% endif %}>{{ user.get_full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">No leads found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Data Exports -->
+    <div x-show="activeTab === 'exports'" class="space-y-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Data Exports</h2>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+            <form method="GET" action="{% url 'quotations:export_csv' %}">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                        <input type="date" x-model="exportStartDate" name="from" class="w-full border rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                        <input type="date" x-model="exportEndDate" name="to" class="w-full border rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                        <select x-model="exportProduct" name="product" class="w-full border rounded px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">All Products</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Export CSV
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add item row to quotation form
+    document.getElementById('add-item').addEventListener('click', function() {
+        const container = document.getElementById('items-container');
+        const rowCount = container.querySelectorAll('tr').length;
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td class="px-4 py-2 border">
+                <select name="form-${rowCount}-product" class="w-full border rounded px-2 py-1 text-sm product-select">
+                    <option value="">Select Product</option>
+                    {% for product in products %}
+                    <option value="{{ product.id }}" data-price="{{ product.unit_price }}" data-tax="{{ product.tax_rate }}">{{ product.name }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td class="px-4 py-2 border">
+                <input type="text" name="form-${rowCount}-description" class="w-full border rounded px-2 py-1 text-sm">
+            </td>
+            <td class="px-4 py-2 border">
+                <input type="number" name="form-${rowCount}-quantity" value="1" min="1" class="w-full border rounded px-2 py-1 text-sm">
+            </td>
+            <td class="px-4 py-2 border">
+                <input type="number" name="form-${rowCount}-unit_price" step="0.01" min="0" class="w-full border rounded px-2 py-1 text-sm price-input">
+            </td>
+            <td class="px-4 py-2 border">
+                <input type="number" name="form-${rowCount}-tax_rate" step="0.01" min="0" max="100" class="w-full border rounded px-2 py-1 text-sm tax-input">
+            </td>
+            <td class="px-4 py-2 border">
+                <button type="button" class="text-red-600 hover:text-red-800 text-sm remove-item">
+                    Remove
+                </button>
+            </td>
+        `;
+        container.appendChild(newRow);
+
+        // Add event listener for product selection
+        const productSelect = newRow.querySelector('.product-select');
+        const priceInput = newRow.querySelector('.price-input');
+        const taxInput = newRow.querySelector('.tax-input');
+
+        productSelect.addEventListener('change', function() {
+            if (this.value) {
+                const selectedOption = this.options[this.selectedIndex];
+                priceInput.value = selectedOption.dataset.price;
+                taxInput.value = selectedOption.dataset.tax;
+            }
+        });
+
+        // Add event listener for remove button
+        newRow.querySelector('.remove-item').addEventListener('click', function() {
+            container.removeChild(newRow);
+        });
+    });
+
+    // Enable remove button for first row if more than one row exists
+    const container = document.getElementById('items-container');
+    if (container.querySelectorAll('tr').length > 1) {
+        container.querySelector('tr button').disabled = false;
+        container.querySelector('tr button').classList.remove('text-gray-400');
+        container.querySelector('tr button').classList.add('text-red-600', 'hover:text-red-800');
+    }
+});
+</script>
+
+<script src="//unpkg.com/alpinejs" defer></script>
 {% endblock %}
