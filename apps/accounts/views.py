@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponseBadRequest
-from apps.quotations.models import Quotation,ActivityAction, ActivityLog,QuotationStatus
+from apps.quotations.models import Quotation,ActivityAction, ActivityLog,QuotationStatus,Lead
 from django.views.decorators.http import require_POST
 from django.contrib import messages
 from datetime import datetime
@@ -113,3 +113,13 @@ def update_quotation_status(request, pk):
 
     messages.error(request, "Invalid request method.")
     return redirect(request.META.get('HTTP_REFERER', '/'))
+
+@login_required
+def update_lead_status(request, pk):
+    lead = get_object_or_404(Lead, pk=pk, assigned_to=request.user)
+    if request.method == "POST":
+        lead.status = request.POST.get("status")
+        lead.follow_up_date = request.POST.get("follow_up_date") or None
+        lead.save()
+        messages.success(request, "Lead updated successfully.")
+    return redirect("accounts:salesperson_dashboard")

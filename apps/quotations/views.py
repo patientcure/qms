@@ -366,6 +366,8 @@ class QuotationCSVExportView(QuotationMixin, View):
 
 
 # ========== Salesperson Dashboard ==========
+from apps.quotations.models import QuotationStatus, LeadStatus
+
 class SalespersonDashboardView(QuotationMixin, TemplateView):
     """Dashboard for salespersons"""
     template_name = "accounts/salesperson_dashboard.html"
@@ -392,7 +394,8 @@ class SalespersonDashboardView(QuotationMixin, TemplateView):
         ).order_by("follow_up_date")[:20]
 
         # Pass status choices explicitly
-        ctx['status_choices'] = QuotationStatus.choices  # <-- add this
+        ctx['status_choices'] = QuotationStatus.choices
+        ctx['lead_status_choices'] = LeadStatus.choices
 
         return ctx
 

@@ -118,14 +118,18 @@
                         <td class="px-6 py-4 font-medium">{{ lead.customer.name }}</td>
                         <td class="px-6 py-4">{{ lead.customer.company_name|default:"-" }}</td>
                         <td class="px-6 py-4">
-                            <span class="px-2 py-1 rounded-full text-xs 
-                                {% if lead.status == 'pending' %}bg-gray-100 text-gray-800
-                                {% elif lead.status == 'in_progress' %}bg-blue-100 text-blue-800
-                                {% elif lead.status == 'converted' %}bg-green-100 text-green-800
-                                {% elif lead.status == 'lost' %}bg-red-100 text-red-800
-                                {% else %}bg-yellow-100 text-yellow-800{% endif %}">
-                                {{ lead.get_status_display }}
-                            </span>
+                            <form method="POST" action="{% url 'accounts:update_lead_status' lead.pk %}" class="flex items-center space-x-2">
+                                {% csrf_token %}
+                                <select name="status" class="border rounded px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                    {% for key, value in lead_status_choices %}
+                                    <option value="{{ key }}" {% if lead.status == key %}selected{% endif %}>{{ value }}</option>
+                                    {% endfor %}
+                                </select>
+                                <input type="date" name="follow_up_date" value="{{ lead.follow_up_date|date:'Y-m-d' }}" class="border rounded px-3 py-2 text-sm">
+                                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
+                                    Update
+                                </button>
+                            </form>
                         </td>
                         <td class="px-6 py-4">
                             {% if lead.follow_up_date %}
