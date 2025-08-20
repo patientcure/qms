@@ -1,560 +1,1198 @@
-{% extends "base.html" %}
 {% load static %}
 {% load widget_tweaks %}
 
-{% block title %}Create Quotation{% endblock %}
+{% block title %}{% if object %}Edit{% else %}Create{% endif %} Quotation{% endblock %}
+
+{% block extra_head %}
+<style>
+* { box-sizing: border-box; }
+
+.quotation-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 30px;
+}
+
+@media (max-width: 1024px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+
+.form-column {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.preview-column {
+  position: sticky;
+  top: 20px;
+  height: fit-content;
+}
+
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 20px;
+}
+
+.header-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #1e293b;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-primary, .btn-secondary, .btn-cancel, .btn-success, .btn-preview {
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.btn-primary { background: #3b82f6; color: white; }
+.btn-primary:hover { background: #2563eb; }
+.btn-secondary { background: #64748b; color: white; padding: 10px 20px; }
+.btn-secondary:hover { background: #475569; }
+.btn-cancel { background: #ef4444; color: white; padding: 10px 20px; }
+.btn-cancel:hover { background: #dc2626; }
+.btn-success { background: #10b981; color: white; }
+.btn-success:hover { background: #059669; }
+.btn-preview { background: #6366f1; color: white; }
+.btn-preview:hover { background: #4f46e5; }
+
+.btn-icon {
+  background: #f8fafc;
+  color: #64748b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.btn-icon-danger {
+  background: #fef2f2;
+  color: #ef4444;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+  cursor: pointer;
+}
+
+.btn-input-action {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: none;
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-section {
+  background: #f8fafc;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: 1fr; }
+.grid-cols-2 { grid-template-columns: 1fr 1fr; }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.gap-4 { gap: 16px; }
+.space-y-4 > * + * { margin-top: 16px; }
+.flex { display: flex; }
+.space-x-2 > * + * { margin-left: 8px; }
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
+}
+
+.form-control {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-group {
+  display: flex;
+}
+
+.input-group .form-control {
+  border-radius: 6px 0 0 6px;
+  border-right: none;
+}
+
+.customer-details {
+  background: white;
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  margin-top: 12px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: #6b7280;
+  margin-right: 8px;
+}
+
+.items-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-row {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.item-grid {
+  display: grid;
+  grid-template-columns: 2fr 3fr 1fr 1.5fr 1fr 60px;
+  gap: 12px;
+  align-items: end;
+}
+
+.item-product, .item-description, .item-quantity, .item-price, .item-tax, .item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.preview-header {
+  background: #f8fafc;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview-frame {
+  width: 100%;
+  height: 600px;
+  border: none;
+  background: white;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 24px 0;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 24px;
+}
+
+.totals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.total-item {
+  background: #f9fafb;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.total-item.total-final {
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+}
+
+.total-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.total-amount {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.total-final .total-label { color: #1e40af; }
+.total-final .total-amount { color: #1e40af; }
+
+.error-message {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  min-width: 300px;
+  color: white;
+}
+
+.toast.toast-success { background: #10b981; }
+.toast.toast-error { background: #ef4444; }
+.toast.toast-info { background: #3b82f6; }
+
+.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .item-grid { grid-template-columns: 1fr; gap: 12px; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .totals-grid { grid-template-columns: 1fr; }
+  .form-actions { justify-content: stretch; }
+  .form-actions button { flex: 1; }
+}
+</style>
+
+<!-- FontAwesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<!-- Alpine.js for reactivity -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+{% endblock %}
 
 {% block content %}
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-  <!-- Left Column: Form -->
-  <div>
-    <form id="q-form" method="post" class="space-y-4"
-      action="{% if object %}{% url 'quotations:update' object.pk %}{% else %}{% url 'quotations:admin_create_quotation' %}{% endif %}">
-      {% csrf_token %}
-
-      <!-- Quotation Section -->
-      <div class="bg-white p-6 rounded-xl shadow">
-        <h2 class="font-semibold text-lg mb-4">Quotation Details</h2>
-
-        <!-- Customer Row with Add Button -->
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Customer</label>
-          <div class="flex gap-2">
-            {{ form.customer|add_class:"flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none
-            focus:ring-2 focus:ring-blue-500" }}
-            <button type="button" onclick="openModal('customer-modal')"
-              class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-              <i class="fas fa-plus mr-1"></i> New
-            </button>
-          </div>
-          {% if form.customer.errors %}
-          <div class="mt-1 text-sm text-red-600">{{ form.customer.errors }}</div>
-          {% endif %}
-        </div>
-
-        <!-- Details Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-            {{ form.assigned_to|add_class:"w-full border border-gray-300 rounded-md px-3 py-2" }}
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Follow-up Date</label>
-            {{ form.follow_up_date|add_class:"w-full border border-gray-300 rounded-md px-3 py-2" }}
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-            {{ form.currency|add_class:"w-full border border-gray-300 rounded-md px-3 py-2" }}
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Terms</label>
-            {{ form.terms|add_class:"w-full border border-gray-300 rounded-md px-3 py-2" }}
-          </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email Template</label>
-            {{ form.email_template|add_class:"w-full border border-gray-300 rounded-md px-3 py-2" }}
-          </div>
+<div x-data="quotationApp()" x-init="init()" class="quotation-container">
+  <!-- Main Layout -->
+  <div class="main-grid">
+    <!-- Left Column - Form -->
+    <div class="form-column">
+      <!-- Header -->
+      <div class="header-section">
+        <h1 class="header-title">
+          {% if object %}Edit{% else %}Create{% endif %} Quotation
+        </h1>
+        <div class="header-actions">
+          <button @click="saveDraft()" class="btn-secondary" :disabled="state.loading">
+            <i class="fas fa-save"></i> Save Draft
+          </button>
+          <a href="{% url 'quotations:admin_dashboard' %}" class="btn-cancel">
+            <i class="fas fa-times"></i> Cancel
+          </a>
         </div>
       </div>
 
-      <!-- Items Section -->
-      <div class="bg-white p-6 rounded-xl shadow">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="font-semibold text-lg">Items</h3>
-          <button type="button" id="add-item"
-            class="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors">
-            <i class="fas fa-plus mr-1"></i> Add Item
-          </button>
+      <!-- Form -->
+      <form id="quotation-form" method="post" enctype="multipart/form-data" 
+            class="form-sections" :class="{'loading': state.loading}">
+        {% csrf_token %}
+        
+        <!-- Customer Section -->
+        <div class="form-section">
+          <div class="section-header">
+            <h2>Customer Information</h2>
+            <button type="button" @click="openModal('customer')" class="btn-icon">
+              <i class="fas fa-plus"></i> New Customer
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 gap-4">
+            <div class="form-group">
+              <label for="id_customer">Customer *</label>
+              <div class="input-group">
+                {{ form.customer|add_class:"form-control" }}
+                <button type="button" @click="openCustomerSearch()" class="btn-input-action">
+                  <i class="fas fa-search"></i>
+                </button>
+              </div>
+              {% if form.customer.errors %}
+              <div class="error-message">{{ form.customer.errors.0 }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Customer Details Display -->
+            <div class="customer-details" x-show="state.customerDetails" x-transition>
+              <div class="detail-grid">
+                <div>
+                  <span class="detail-label">Company:</span>
+                  <span x-text="state.customerDetails?.company_name || 'N/A'"></span>
+                </div>
+                <div>
+                  <span class="detail-label">Email:</span>
+                  <span x-text="state.customerDetails?.email || 'N/A'"></span>
+                </div>
+                <div>
+                  <span class="detail-label">Phone:</span>
+                  <span x-text="state.customerDetails?.phone || 'N/A'"></span>
+                </div>
+                <div>
+                  <span class="detail-label">Address:</span>
+                  <span x-text="state.customerDetails?.address || 'N/A'"></span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {{ formset.management_form }}
-        <div id="items" class="space-y-3">
-          {% for form in formset %}
-          <div class="item-row grid grid-cols-12 gap-2 p-3 border border-gray-200 rounded-md">
-            <div class="col-span-5">
-              <div class="flex gap-2">
-                {{ form.product|add_class:"flex-1 border border-gray-300 rounded-md px-2 py-1 text-sm" }}
-                <button type="button" onclick="openModal('product-modal')"
-                  class="px-2 py-1 bg-blue-600 text-white rounded-md text-xs hover:bg-blue-700 transition-colors">
-                  <i class="fas fa-plus"></i>
+        <!-- Quotation Details -->
+        <div class="form-section">
+          <div class="section-header">
+            <h2>Quotation Details</h2>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4">
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Left Column -->
+              <div class="space-y-4">
+                <div class="form-group">
+                  <label for="id_quotation_number">Quotation Number</label>
+                  {{ form.quotation_number|add_class:"form-control" }}
+                  {% if form.quotation_number.errors %}
+                  <div class="error-message">{{ form.quotation_number.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="form-group">
+                  <label for="id_assigned_to">Assigned To</label>
+                  {{ form.assigned_to|add_class:"form-control" }}
+                  {% if form.assigned_to.errors %}
+                  <div class="error-message">{{ form.assigned_to.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="form-group">
+                  <label for="id_valid_until">Valid Until</label>
+                  {{ form.valid_until|add_class:"form-control" }}
+                  {% if form.valid_until.errors %}
+                  <div class="error-message">{{ form.valid_until.errors.0 }}</div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Right Column -->
+              <div class="space-y-4">
+                <div class="form-group">
+                  <label for="id_currency">Currency</label>
+                  {{ form.currency|add_class:"form-control" }}
+                  {% if form.currency.errors %}
+                  <div class="error-message">{{ form.currency.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="form-group">
+                  <label for="id_terms">Terms & Conditions</label>
+                  <div class="input-group">
+                    {{ form.terms|add_class:"form-control" }}
+                    <button type="button" @click="previewTerms()" class="btn-input-action">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                  {% if form.terms.errors %}
+                  <div class="error-message">{{ form.terms.errors.0 }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="form-group">
+                  <label for="id_email_template">Email Template</label>
+                  {{ form.email_template|add_class:"form-control" }}
+                  {% if form.email_template.errors %}
+                  <div class="error-message">{{ form.email_template.errors.0 }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Items Section -->
+        <div class="form-section">
+          <div class="section-header">
+            <h2>Items</h2>
+            <div class="flex space-x-2">
+              <button type="button" @click="addBlankItem()" class="btn-icon">
+                <i class="fas fa-plus"></i> Add Item
+              </button>
+              <button type="button" @click="openModal('product')" class="btn-icon">
+                <i class="fas fa-search"></i> Find Product
+              </button>
+            </div>
+          </div>
+
+          {{ formset.management_form }}
+          <div id="items-container" class="items-container">
+            {% for form in formset %}
+            <div class="item-row" data-form-index="{{ forloop.counter0 }}">
+              <div class="item-grid">
+                <div class="item-product">
+                  <label>Product</label>
+                  <div class="input-group">
+                    {{ form.product|add_class:"form-control" }}
+                    <button type="button" @click="openProductSearch($event)" class="btn-input-action">
+                      <i class="fas fa-search"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="item-description">
+                  <label>Description</label>
+                  {{ form.description|add_class:"form-control"|attr:"placeholder:Item description" }}
+                </div>
+
+                <div class="item-quantity">
+                  <label>Qty</label>
+                  {{ form.quantity|add_class:"form-control quantity-input"|attr:"placeholder:0"|attr:"step:0.01" }}
+                </div>
+
+                <div class="item-price">
+                  <label>Price</label>
+                  {{ form.unit_price|add_class:"form-control price-input"|attr:"placeholder:0.00"|attr:"step:0.01" }}
+                </div>
+
+                <div class="item-tax">
+                  <label>Tax %</label>
+                  {{ form.tax_rate|add_class:"form-control tax-input"|attr:"placeholder:0"|attr:"step:0.01" }}
+                </div>
+
+                <div class="item-actions">
+                  <label>&nbsp;</label>
+                  <button type="button" @click="removeItem($event)" class="btn-icon-danger">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Hidden fields -->
+              {{ form.id }}
+              {% if form.DELETE %}
+              {{ form.DELETE }}
+              {% endif %}
+            </div>
+            {% empty %}
+            <!-- Default empty item -->
+            <div class="item-row" data-form-index="0">
+              <div class="item-grid">
+                <div class="item-product">
+                  <label>Product</label>
+                  <div class="input-group">
+                    <select name="form-0-product" class="form-control" id="id_form-0-product">
+                      <option value="">Select a product...</option>
+                    </select>
+                    <button type="button" @click="openProductSearch($event)" class="btn-input-action">
+                      <i class="fas fa-search"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="item-description">
+                  <label>Description</label>
+                  <input type="text" name="form-0-description" class="form-control" 
+                         placeholder="Item description" id="id_form-0-description">
+                </div>
+                <div class="item-quantity">
+                  <label>Qty</label>
+                  <input type="number" name="form-0-quantity" class="form-control quantity-input" 
+                         placeholder="1" step="0.01" id="id_form-0-quantity" value="1">
+                </div>
+                <div class="item-price">
+                  <label>Price</label>
+                  <input type="number" name="form-0-unit_price" class="form-control price-input" 
+                         placeholder="0.00" step="0.01" id="id_form-0-unit_price">
+                </div>
+                <div class="item-tax">
+                  <label>Tax %</label>
+                  <input type="number" name="form-0-tax_rate" class="form-control tax-input" 
+                         placeholder="0" step="0.01" id="id_form-0-tax_rate" value="0">
+                </div>
+                <div class="item-actions">
+                  <label>&nbsp;</label>
+                  <button type="button" @click="removeItem($event)" class="btn-icon-danger">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+              <input type="hidden" name="form-0-id" id="id_form-0-id">
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Totals Section -->
+        <div class="form-section">
+          <h3>Summary</h3>
+          <div class="totals-grid">
+            <div class="total-item">
+              <div class="total-label">Subtotal</div>
+              <div class="total-amount" x-text="formatCurrency(state.totals.subtotal)">0.00</div>
+            </div>
+            <div class="total-item">
+              <div class="total-label">Tax</div>
+              <div class="total-amount" x-text="formatCurrency(state.totals.tax)">0.00</div>
+            </div>
+            <div class="total-item total-final">
+              <div class="total-label">Total</div>
+              <div class="total-amount" x-text="formatCurrency(state.totals.total)">0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes Section -->
+        <div class="form-section">
+          <div class="section-header">
+            <h2>Additional Information</h2>
+          </div>
+          <div class="form-group">
+            <label for="id_notes">Notes</label>
+            {{ form.notes|add_class:"form-control"|attr:"rows:4"|attr:"placeholder:Additional notes or comments" }}
+            {% if form.notes.errors %}
+            <div class="error-message">{{ form.notes.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <button type="button" @click="previewQuotation()" class="btn-preview" :disabled="state.loading">
+            <i class="fas fa-eye"></i> Preview
+          </button>
+          <button type="button" @click="saveQuotation()" class="btn-primary" :disabled="state.loading">
+            <i class="fas fa-save"></i> Save Quotation
+          </button>
+          {% if object %}
+          <button type="button" @click="sendQuotation()" class="btn-success" :disabled="state.loading">
+            <i class="fas fa-paper-plane"></i> Send to Customer
+          </button>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column - Preview -->
+    <div class="preview-column">
+      <div class="preview-container">
+        <div class="preview-header">
+          <h3>Live Preview</h3>
+          <div class="preview-actions">
+            <button @click="refreshPreview()" class="btn-icon" :disabled="state.previewLoading">
+              <i class="fas fa-sync-alt" :class="{'fa-spin': state.previewLoading}"></i>
+            </button>
+            <button @click="downloadPdf()" class="btn-icon" :disabled="state.loading">
+              <i class="fas fa-download"></i>
+            </button>
+          </div>
+        </div>
+        <iframe id="preview-frame" class="preview-frame" x-ref="previewFrame"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function quotationApp() {
+  return {
+    // Application State
+    state: {
+      loading: false,
+      previewLoading: false,
+      customerDetails: null,
+      quotationNumber: '',
+      totals: {
+        subtotal: 0,
+        tax: 0,
+        total: 0
+      }
+    },
+
+    // Initialize the application
+    init() {
+      console.log('Initializing quotation app...');
+      this.setupEventListeners();
+      this.loadCustomerDetails();
+      this.calculateTotals();
+      this.previewQuotation();
+      this.ensureMinimumItems();
+    },
+
+    // Ensure at least one item row exists
+    ensureMinimumItems() {
+      const container = document.getElementById('items-container');
+      if (!container.children.length) {
+        this.addBlankItem();
+      }
+    },
+
+    // Setup event listeners
+    setupEventListeners() {
+      // Customer select change
+      const customerSelect = document.querySelector('[name="customer"]');
+      if (customerSelect) {
+        customerSelect.addEventListener('change', (e) => {
+          this.loadCustomerDetails(e.target.value);
+          this.debouncedPreview();
+        });
+      }
+
+      // Items container event delegation
+      const itemsContainer = document.getElementById('items-container');
+      if (itemsContainer) {
+        itemsContainer.addEventListener('input', (e) => {
+          if (e.target.matches('.quantity-input, .price-input, .tax-input')) {
+            this.calculateTotals();
+            this.debouncedPreview();
+          }
+        });
+
+        itemsContainer.addEventListener('change', (e) => {
+          if (e.target.name && e.target.name.includes('product')) {
+            this.loadProductDetails(e.target);
+            this.debouncedPreview();
+          }
+        });
+      }
+
+      // Form inputs for preview updates
+      const form = document.getElementById('quotation-form');
+      if (form) {
+        form.addEventListener('input', (e) => {
+          if (e.target.matches('input, select, textarea')) {
+            this.debouncedPreview();
+          }
+        });
+        
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+        });
+      }
+    },
+
+    // Debounced preview function
+    debouncedPreview: (() => {
+      let timeout;
+      return function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          this.previewQuotation();
+        }, 800);
+      };
+    })(),
+
+    // Load customer details
+    async loadCustomerDetails(customerId = null) {
+      if (!customerId) {
+        const customerSelect = document.querySelector('[name="customer"]');
+        customerId = customerSelect ? customerSelect.value : null;
+      }
+      
+      if (!customerId) {
+        this.state.customerDetails = null;
+        return;
+      }
+
+      try {
+        // Try the API endpoint, fallback to a simple approach if it doesn't exist
+        const response = await fetch(`/api/customers/${customerId}/`).catch(() => null);
+        if (response && response.ok) {
+          this.state.customerDetails = await response.json();
+        } else {
+          // Fallback - extract customer name from select option
+          const customerSelect = document.querySelector('[name="customer"]');
+          const selectedOption = customerSelect.querySelector(`option[value="${customerId}"]`);
+          if (selectedOption) {
+            this.state.customerDetails = {
+              name: selectedOption.textContent,
+              company_name: 'N/A',
+              email: 'N/A',
+              phone: 'N/A',
+              address: 'N/A'
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Error loading customer details:', error);
+        this.state.customerDetails = null;
+      }
+    },
+
+    // Load product details when product is selected
+    async loadProductDetails(productSelect) {
+      const productId = productSelect.value;
+      if (!productId) return;
+
+      try {
+        const response = await fetch(`/ajax/products/${productId}/`).catch(() => null);
+        if (response && response.ok) {
+          const data = await response.json();
+          const row = productSelect.closest('.item-row');
+          
+          const priceInput = row.querySelector('.price-input');
+          const taxInput = row.querySelector('.tax-input');
+          
+          if (priceInput && data.unit_price) {
+            priceInput.value = data.unit_price;
+          }
+          if (taxInput && data.tax_rate) {
+            taxInput.value = data.tax_rate;
+          }
+          
+          this.calculateTotals();
+        }
+      } catch (error) {
+        console.error('Error loading product details:', error);
+      }
+    },
+
+    // Calculate item totals
+    calculateTotals() {
+      this.state.totals = { subtotal: 0, tax: 0, total: 0 };
+
+      document.querySelectorAll('.item-row').forEach(row => {
+        const quantity = parseFloat(row.querySelector('.quantity-input')?.value) || 0;
+        const price = parseFloat(row.querySelector('.price-input')?.value) || 0;
+        const taxRate = parseFloat(row.querySelector('.tax-input')?.value) || 0;
+
+        const rowSubtotal = quantity * price;
+        const rowTax = rowSubtotal * (taxRate / 100);
+
+        this.state.totals.subtotal += rowSubtotal;
+        this.state.totals.tax += rowTax;
+      });
+
+      this.state.totals.total = this.state.totals.subtotal + this.state.totals.tax;
+    },
+
+    // Format currency for display
+    formatCurrency(amount) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'decimal',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(amount || 0);
+    },
+
+    // Add a new blank item
+    addBlankItem() {
+      const totalFormsInput = document.querySelector('[name$="TOTAL_FORMS"]');
+      if (!totalFormsInput) {
+        console.error('TOTAL_FORMS input not found');
+        return;
+      }
+      
+      const formIdx = parseInt(totalFormsInput.value) || 0;
+      const container = document.getElementById('items-container');
+      
+      const newRowHtml = `
+        <div class="item-row" data-form-index="${formIdx}">
+          <div class="item-grid">
+            <div class="item-product">
+              <label>Product</label>
+              <div class="input-group">
+                <select name="form-${formIdx}-product" class="form-control" id="id_form-${formIdx}-product">
+                  <option value="">Select a product...</option>
+                </select>
+                <button type="button" onclick="this.closest('[x-data]').__x.$data.openProductSearch(event)" class="btn-input-action">
+                  <i class="fas fa-search"></i>
                 </button>
               </div>
             </div>
-            <div class="col-span-4">
-              {{ form.description|add_class:"w-full border border-gray-300 rounded-md px-2 py-1
-              text-sm"|attr:"placeholder:Description" }}
+            <div class="item-description">
+              <label>Description</label>
+              <input type="text" name="form-${formIdx}-description" class="form-control" 
+                     placeholder="Item description" id="id_form-${formIdx}-description">
             </div>
-            <div class="col-span-1">
-              {{ form.quantity|add_class:"w-full border border-gray-300 rounded-md px-2 py-1
-              text-sm"|attr:"placeholder:Qty" }}
+            <div class="item-quantity">
+              <label>Qty</label>
+              <input type="number" name="form-${formIdx}-quantity" class="form-control quantity-input" 
+                     placeholder="1" step="0.01" id="id_form-${formIdx}-quantity" value="1">
             </div>
-            <div class="col-span-1">
-              {{ form.unit_price|add_class:"w-full border border-gray-300 rounded-md px-2 py-1
-              text-sm"|attr:"placeholder:Price" }}
+            <div class="item-price">
+              <label>Price</label>
+              <input type="number" name="form-${formIdx}-unit_price" class="form-control price-input" 
+                     placeholder="0.00" step="0.01" id="id_form-${formIdx}-unit_price">
             </div>
-            <div class="col-span-1">
-              {{ form.tax_rate|add_class:"w-full border border-gray-300 rounded-md px-2 py-1
-              text-sm"|attr:"placeholder:Tax %" }}
+            <div class="item-tax">
+              <label>Tax %</label>
+              <input type="number" name="form-${formIdx}-tax_rate" class="form-control tax-input" 
+                     placeholder="0" step="0.01" id="id_form-${formIdx}-tax_rate" value="0">
             </div>
-            {% if form.DELETE %}
-            <div class="col-span-12 flex justify-end">
-              <label class="flex items-center text-sm text-red-600">
-                {{ form.DELETE }} Delete this item
-              </label>
+            <div class="item-actions">
+              <label>&nbsp;</label>
+              <button type="button" onclick="this.closest('[x-data]').__x.$data.removeItem(event)" class="btn-icon-danger">
+                <i class="fas fa-trash"></i>
+              </button>
             </div>
-            {% endif %}
-            {{ form.id }}
           </div>
-          {% endfor %}
-        </div>
-      </div>
-
-      <!-- Totals Section -->
-      <div class="bg-white p-6 rounded-xl shadow">
-        <h3 class="font-semibold text-lg mb-3">Summary</h3>
-        <div class="grid grid-cols-3 gap-4">
-          <div class="bg-gray-50 p-3 rounded-md">
-            <div class="text-sm text-gray-500">Subtotal</div>
-            <div id="subtotal" class="text-xl font-semibold">0.00</div>
-          </div>
-          <div class="bg-gray-50 p-3 rounded-md">
-            <div class="text-sm text-gray-500">Tax</div>
-            <div id="tax-total" class="text-xl font-semibold">0.00</div>
-          </div>
-          <div class="bg-blue-50 p-3 rounded-md border border-blue-200">
-            <div class="text-sm text-blue-600">Total</div>
-            <div id="grand-total" class="text-2xl font-bold text-blue-800">0.00</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Form Actions -->
-      <div class="flex flex-wrap gap-3">
-        <button type="submit" name="save"
-          class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-          <i class="fas fa-save mr-2"></i> Save
-        </button>
-        {% if object %}
-        <button type="button" id="btn-send"
-          class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
-          <i class="fas fa-paper-plane mr-2"></i> Send Quotation
-        </button>
-        <a href="{% url 'quotations:list' %}"
-          class="px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
-          Cancel
-        </a>
-        {% endif %}
-      </div>
-    </form>
-  </div>
-
-  <!-- Right Column: Preview -->
-  <div class="sticky top-4 h-fit">
-    <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-      <div class="bg-gray-800 text-white px-4 py-2 flex justify-between items-center">
-        <h3 class="font-semibold">Live Preview</h3>
-        <div class="text-sm bg-gray-700 px-2 py-1 rounded">{% if object %}{{ object.quotation_number }}{% else
-          %}PREVIEW{% endif %}</div>
-      </div>
-      <iframe id="preview" class="w-full h-[calc(100vh-150px)] border-0"
-        srcdoc="<div class='flex items-center justify-center h-full text-gray-400'><div class='text-center'><i class='fas fa-file-invoice text-4xl mb-2'></i><p>Preview will appear here</p></div></div>"></iframe>
-    </div>
-  </div>
-</div>
-
-<!-- Customer Modal -->
-<div id="customer-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50">
-  <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-    <div class="p-4 border-b flex justify-between items-center">
-      <h3 class="text-lg font-semibold">New Customer</h3>
-      <button onclick="closeModal('customer-modal')" class="text-gray-400 hover:text-gray-500">
-        <i class="fas fa-times"></i>
-      </button>
-    </div>
-    <form id="customer-form" class="p-4 space-y-3">
-      {% csrf_token %}
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Full Name*</label>
-        <input name="name"
-          class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500" required>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-        <input name="company_name" class="w-full border border-gray-300 rounded-md px-3 py-2">
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Email*</label>
-          <input name="email" type="email" class="w-full border border-gray-300 rounded-md px-3 py-2" required>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-          <input name="phone" class="w-full border border-gray-300 rounded-md px-3 py-2">
-        </div>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Address</label>
-        <textarea name="address" rows="2" class="w-full border border-gray-300 rounded-md px-3 py-2"></textarea>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
-        <input name="gst_number" class="w-full border border-gray-300 rounded-md px-3 py-2">
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" onclick="closeModal('customer-modal')"
-          class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
-          Cancel
-        </button>
-        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-          Save Customer
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Product Modal -->
-<div id="product-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50">
-  <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-    <div class="p-4 border-b flex justify-between items-center">
-      <h3 class="text-lg font-semibold">New Product</h3>
-      <button onclick="closeModal('product-modal')" class="text-gray-400 hover:text-gray-500">
-        <i class="fas fa-times"></i>
-      </button>
-    </div>
-    <form id="product-form" class="p-4 space-y-3">
-      {% csrf_token %}
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Product Name*</label>
-        <input name="name" class="w-full border border-gray-300 rounded-md px-3 py-2" required>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-        <input name="sku" class="w-full border border-gray-300 rounded-md px-3 py-2">
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Unit Price*</label>
-          <input name="unit_price" type="number" step="0.01" min="0"
-            class="w-full border border-gray-300 rounded-md px-3 py-2" required>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%)</label>
-          <input name="tax_rate" type="number" step="0.01" min="0" max="100"
-            class="w-full border border-gray-300 rounded-md px-3 py-2" value="0">
-        </div>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-        <textarea name="description" rows="2" class="w-full border border-gray-300 rounded-md px-3 py-2"></textarea>
-      </div>
-      <div class="flex items-center">
-        <input name="active" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded" checked>
-        <label class="ml-2 block text-sm text-gray-700">Active</label>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" onclick="closeModal('product-modal')"
-          class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
-          Cancel
-        </button>
-        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-          Save Product
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-  // Utility Functions
-  function showToast(message, type = 'success', duration = 3000) {
-    const toast = document.createElement('div');
-    toast.className = `fixed top-4 right-4 px-4 py-2 rounded-md shadow-lg text-white flex items-center 
-    ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} animate-fade-in`;
-    toast.innerHTML = `
-    <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i>
-    <span>${message}</span>
-  `;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.classList.add('opacity-0', 'translate-y-2');
-      setTimeout(() => toast.remove(), 300);
-    }, duration);
-  }
-
-  function openModal(modalId) {
-    document.getElementById(modalId).classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-  }
-
-  function closeModal(modalId) {
-    document.getElementById(modalId).classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-  }
-
-  // Live Preview System
-  let previewDebounce;
-  function updatePreview() {
-    clearTimeout(previewDebounce);
-    const preview = document.getElementById('preview');
-    preview.srcdoc = `
-    <div class="flex items-center justify-center h-full bg-gray-50">
-      <div class="text-center text-gray-400">
-        <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
-        <p>Generating preview...</p>
-      </div>
-    </div>
-  `;
-
-    previewDebounce = setTimeout(() => {
-      const formData = new FormData(document.getElementById('q-form'));
-      fetch("{% url 'quotations:ajax_live_preview' %}", {
-        method: 'POST',
-        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
-        body: formData
-      })
-        .then(response => {
-          if (!response.ok) throw new Error('Server error');
-          return response.json();
-        })
-        .then(data => {
-          if (data.html) {
-            preview.srcdoc = data.html;
-          } else {
-            preview.srcdoc = `
-          <div class="p-4 text-red-500">
-            <i class="fas fa-exclamation-triangle mr-2"></i>
-            ${data.error || 'Preview generation failed'}
-          </div>
-        `;
-          }
-        })
-        .catch(error => {
-          preview.srcdoc = `
-        <div class="p-4 text-red-500">
-          <i class="fas fa-exclamation-triangle mr-2"></i>
-          ${error.message}
+          <input type="hidden" name="form-${formIdx}-id" id="id_form-${formIdx}-id">
         </div>
       `;
-        });
-    }, 500);
-  }
+      
+      container.insertAdjacentHTML('beforeend', newRowHtml);
+      totalFormsInput.value = formIdx + 1;
+      
+      this.calculateTotals();
+      this.debouncedPreview();
+    },
 
-  // Real-Time Calculations
-  function calculateTotals() {
-    let subtotal = 0, taxTotal = 0;
-
-    document.querySelectorAll('.item-row').forEach(row => {
-      const qty = parseFloat(row.querySelector('[name*="-quantity"]').value) || 0;
-      const price = parseFloat(row.querySelector('[name*="-unit_price"]').value) || 0;
-      const taxRate = parseFloat(row.querySelector('[name*="-tax_rate"]').value) || 0;
-
-      const rowTotal = qty * price;
-      subtotal += rowTotal;
-      taxTotal += rowTotal * (taxRate / 100);
-    });
-
-    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
-    document.getElementById('tax-total').textContent = taxTotal.toFixed(2);
-    document.getElementById('grand-total').textContent = (subtotal + taxTotal).toFixed(2);
-  }
-
-  // Form Management
-  function addItemRow() {
-    const totalForms = document.getElementById('id_items-TOTAL_FORMS');
-    const formIdx = parseInt(totalForms.value);
-    const newRow = document.querySelector('.item-row').cloneNode(true);
-
-    // Update all inputs in the new row
-    newRow.querySelectorAll('input, select, textarea').forEach(el => {
-      if (el.name) {
-        el.name = el.name.replace(/form-\d+-/, `form-${formIdx}-`);
-        el.value = '';
-        if (el.tagName === 'SELECT') el.selectedIndex = 0;
-        if (el.id) el.id = el.id.replace(/_\d+_/, `_${formIdx}_`);
-      }
-    });
-
-    // Reset DELETE checkbox if present
-    const deleteCheckbox = newRow.querySelector('[name$="-DELETE"]');
-    if (deleteCheckbox) {
-      deleteCheckbox.checked = false;
-    }
-
-    document.getElementById('items').appendChild(newRow);
-    totalForms.value = formIdx + 1;
-    calculateTotals();
-  }
-
-  // Customer Form Submission
-  document.getElementById('customer-form').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const form = this;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Saving...';
-
-    try {
-      const formData = new FormData(form);
-      const response = await fetch("{% url 'quotations:ajax_customer_new' %}", {
-        method: 'POST',
-        body: formData,
-        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        // Update all customer selects
-        document.querySelectorAll('select[name="customer"]').forEach(select => {
-          const option = new Option(data.name, data.id);
-          select.add(option);
-          select.value = data.id;
-        });
-        closeModal('customer-modal');
-        showToast('Customer added successfully');
-        updatePreview();
+    // Remove an item
+    removeItem(event) {
+      const row = event.target.closest('.item-row');
+      const deleteCheckbox = row.querySelector('[name$="-DELETE"]');
+      
+      if (deleteCheckbox) {
+        deleteCheckbox.checked = true;
+        row.style.display = 'none';
       } else {
-        showToast(data.errors || 'Error saving customer', 'error');
+        row.remove();
       }
-    } catch (error) {
-      showToast('Network error occurred', 'error');
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
-    }
-  });
+      
+      this.calculateTotals();
+      this.debouncedPreview();
+    },
 
-  // Product Form Submission (similar to customer form)
-  document.getElementById('product-form').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const form = this;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
+    // Preview the quotation
+    async previewQuotation() {
+      this.state.previewLoading = true;
+      const previewFrame = this.$refs.previewFrame;
+      
+      previewFrame.srcdoc = `
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: system-ui;">
+          <div style="text-align: center; color: #6366f1;">
+            <div style="font-size: 24px; margin-bottom: 10px;">
+              <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <p>Generating preview...</p>
+          </div>
+        </div>
+      `;
 
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Saving...';
-
-    try {
+      const form = document.getElementById('quotation-form');
       const formData = new FormData(form);
-      const response = await fetch("{% url 'quotations:ajax_product_new' %}", {
-        method: 'POST',
-        body: formData,
-        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        // Update all product selects
-        document.querySelectorAll('select[name*="-product"]').forEach(select => {
-          const option = new Option(data.name, data.id);
-          select.add(option);
-          select.value = data.id;
+      
+      try {
+        const response = await fetch("{% url 'quotations:ajax_live_preview' %}", {
+          method: 'POST',
+          headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+          body: formData
         });
-        closeModal('product-modal');
-        showToast('Product added successfully');
-      } else {
-        showToast(data.errors || 'Error saving product', 'error');
-      }
-    } catch (error) {
-      showToast('Network error occurred', 'error');
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
-    }
-  });
-
-  // Main Form Submission
-  document.getElementById('q-form').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const form = this;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
-
-    try {
-      const formData = new FormData(form);
-      const response = await fetch(form.action, {
-        method: form.method,
-        body: formData,
-        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.redirect) {
-          window.location.href = data.redirect;
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.html) {
+            previewFrame.srcdoc = data.html;
+          } else {
+            throw new Error(data.error || 'Preview generation failed');
+          }
         } else {
-          showToast('Quotation saved successfully');
-          updatePreview();
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+      } catch (error) {
+        console.error('Preview error:', error);
+        previewFrame.srcdoc = `
+          <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: system-ui;">
+            <div style="text-align: center; color: #ef4444;">
+              <div style="font-size: 24px; margin-bottom: 10px;">
+                <i class="fas fa-exclamation-triangle"></i>
+              </div>
+              <p>Preview unavailable</p>
+              <p style="font-size: 12px; color: #6b7280;">${error.message}</p>
+            </div>
+          </div>
+        `;
+      } finally {
+        this.state.previewLoading = false;
+      }
+    },
+
+    // Refresh preview
+    refreshPreview() {
+      this.previewQuotation();
+    },
+
+    // Save as draft
+    async saveDraft() {
+      await this.submitForm('draft');
+    },
+
+    // Save quotation
+    async saveQuotation() {
+      await this.submitForm('save');
+    },
+
+    // Submit form
+    async submitForm(action) {
+      this.state.loading = true;
+      const form = document.getElementById('quotation-form');
+      const formData = new FormData(form);
+      
+      formData.append('action', action);
+
+      try {
+        const response = await fetch(form.action || window.location.href, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          }
+        });
+        
+        if (response.ok) {
+          const contentType = response.headers.get('content-type');
+          
+          if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            
+            if (data.success) {
+              this.showToast('Quotation saved successfully!', 'success');
+              if (data.redirect) {
+                setTimeout(() => window.location.href = data.redirect, 1500);
+              }
+            } else {
+              this.showFormErrors(data.errors || {});
+              this.showToast('Please fix the errors below', 'error');
+            }
+          } else {
+            this.showToast(`Quotation ${action === 'draft' ? 'draft ' : ''}saved successfully!`, 'success');
+          }
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Submit error:', error);
+        this.showToast('An error occurred while saving', 'error');
+      } finally {
+        this.state.loading = false;
+      }
+    },
+
+    // Send quotation
+    async sendQuotation() {
+      const confirmed = await this.showConfirmModal(
+        'Send Quotation',
+        'Are you sure you want to send this quotation to the customer?'
+      );
+      
+      if (!confirmed) return;
+      
+      this.state.loading = true;
+      const form = document.getElementById('quotation-form');
+      const formData = new FormData(form);
+      
+      try {
+        const response = await fetch("{% url 'quotations:send_quotation' %}", {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          this.showToast('Quotation sent successfully!', 'success');
+          if (data.redirect) {
+            setTimeout(() => window.location.href = data.redirect, 1500);
+          }
+        } else {
+          throw new Error(data.error || 'Failed to send quotation');
+        }
+      } catch (error) {
+        console.error('Send error:', error);
+        this.showToast(error.message, 'error');
+      } finally {
+        this.state.loading = false;
+      }
+    },
+
+    // Download PDF
+    async downloadPdf() {
+      this.state.loading = true;
+      const form = document.getElementById('quotation-form');
+      const formData = new FormData(form);
+      
+      try {
+        const response = await fetch("{% url 'quotations:generate_pdf' %}", {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          }
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Quotation-${new Date().toISOString().slice(0,10)}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          this.showToast('PDF downloaded successfully!', 'success');
+        } else {
+          throw new Error('Failed to generate PDF');
+        }
+      } catch (error) {
+        console.error('PDF error:', error);
+        this.showToast('PDF generation not available yet', 'info');
+      } finally {
+        this.state.loading = false;
+      }
+    },
+
+    // Show form errors
+    showFormErrors(errors) {
+      document.querySelectorAll('.error-message').forEach(el => {
+        if (!el.textContent.includes('This field is required')) {
+          el.textContent = '';
+        }
+      });
+      
+      for (const field in errors) {
+        const input = document.querySelector(`[name="${field}"]`);
+        if (input) {
+          const errorElement = input.closest('.form-group')?.querySelector('.error-message');
+          if (errorElement) {
+            errorElement.textContent = Array.isArray(errors[field]) ? 
+              errors[field].join(', ') : errors[field];
+          }
+        }
+      }
+    },
+
+    // Show toast message
+    showToast(message, type = 'success') {
+      document.querySelectorAll('.toast').forEach(toast => toast.remove());
+      
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.innerHTML = `
+        <i class="fas ${type === 'success' ? 'fa-check-circle' : 
+                        type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+        <span>${message}</span>
+      `;
+      
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.transform = 'translateX(100%)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    },
+
+    // Modal and search placeholders
+    openModal(type) {
+      this.showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} creation modal not implemented yet`, 'info');
+    },
+
+    openCustomerSearch() {
+      this.showToast('Customer search modal not implemented yet', 'info');
+    },
+
+    openProductSearch(event) {
+      this.showToast('Product search modal not implemented yet', 'info');
+    },
+
+    previewTerms() {
+      const termsSelect = document.querySelector('[name="terms"]');
+      const termsId = termsSelect ? termsSelect.value : null;
+      if (termsId) {
+        this.showToast('Terms preview modal not implemented yet', 'info');
       } else {
-        const error = await response.json();
-        showToast(error.message || 'Error saving quotation', 'error');
+        this.showToast('Please select terms & conditions first', 'error');
       }
-    } catch (error) {
-      showToast('Network error occurred', 'error');
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
+    },
+
+    showConfirmModal(title, message) {
+      return Promise.resolve(confirm(`${title}\n\n${message}`));
     }
-  });
-
-  // Send Quotation Handler
-  // Send Quotation Handler
-  // Send Quotation Handler
-  // Send Quotation Handler
-  const sendBtn = document.getElementById('btn-send');
-  if (sendBtn) {
-
-  }
-
-  // Initialize Event Listeners
-  document.addEventListener('DOMContentLoaded', function () {
-    // Add item button
-    document.getElementById('add-item').addEventListener('click', addItemRow);
-
-    // Calculate totals when item values change
-    document.getElementById('items').addEventListener('input', function (e) {
-      if (e.target.name && (e.target.name.includes('quantity') ||
-        e.target.name.includes('unit_price') ||
-        e.target.name.includes('tax_rate'))) {
-        calculateTotals();
-      }
-    });
-
-    // Update preview when form changes
-    document.getElementById('q-form').addEventListener('input', updatePreview);
-
-    // Initialize calculations and preview if form has data
-    calculateTotals();
-    if (document.querySelector('[name="customer"]').value) {
-      updatePreview();
-    }
-  });
+  };
+}
 </script>
-
-<style>
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .animate-fade-in {
-    animation: fadeIn 0.3s ease-out forwards;
-  }
-</style>
 {% endblock %}

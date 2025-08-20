@@ -3,41 +3,144 @@
 <head>
   <meta charset="utf-8" />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size: 12px; }
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td { border: 1px solid #ddd; padding: 6px; }
-    .right { text-align: right; }
+    body { 
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; 
+      font-size: 14px;
+      line-height: 1.5;
+      color: #333;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .company-info {
+      width: 60%;
+    }
+    .quotation-info {
+      text-align: right;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    .table th {
+      background-color: #f8f9fa;
+      text-align: left;
+      padding: 8px;
+      border: 1px solid #dee2e6;
+    }
+    .table td {
+      padding: 8px;
+      border: 1px solid #dee2e6;
+    }
+    .right {
+      text-align: right;
+    }
+    .totals {
+      margin-top: 20px;
+      text-align: right;
+    }
+    .terms {
+      margin-top: 30px;
+      page-break-inside: avoid;
+    }
+    .terms h4 {
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 5px;
+    }
+    .footer {
+      margin-top: 50px;
+      font-size: 12px;
+      text-align: center;
+      color: #6c757d;
+    }
+    .page-break {
+      page-break-after: always;
+    }
   </style>
 </head>
 <body>
-  <h2>Quotation {{ quotation.quotation_number }}</h2>
-  {% if company %}
-  <div><strong>{{ company.name }}</strong><br/>{{ company.address }}</div>
-  {% endif %}
-  <hr/>
-  <p><strong>Customer:</strong> {{ quotation.customer.name }} — {{ quotation.customer.email }}</p>
+  <div class="header">
+    <div class="company-info">
+      {% if company.logo %}
+      <img src="{{ company.logo.url }}" alt="{{ company.name }}" style="max-height: 60px; margin-bottom: 10px;">
+      {% endif %}
+      <h2>{{ company.name }}</h2>
+      <p>{{ company.address|linebreaksbr }}</p>
+      <p>
+        {% if company.phone %}<strong>Phone:</strong> {{ company.phone }}<br>{% endif %}
+        {% if company.email %}<strong>Email:</strong> {{ company.email }}<br>{% endif %}
+        {% if company.gst_number %}<strong>GST:</strong> {{ company.gst_number }}{% endif %}
+      </p>
+    </div>
+    <div class="quotation-info">
+      <h2>QUOTATION</h2>
+      <p><strong>Number:</strong> {{ quotation.quotation_number }}</p>
+      <p><strong>Date:</strong> {{ quotation.created_at|date:"d M Y" }}</p>
+      {% if quotation.valid_until %}
+      <p><strong>Valid Until:</strong> {{ quotation.valid_until|date:"d M Y" }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="customer-info">
+    <h3>To:</h3>
+    <p>
+      <strong>{{ quotation.customer.name }}</strong><br>
+      {% if quotation.customer.company_name %}{{ quotation.customer.company_name }}<br>{% endif %}
+      {{ quotation.customer.address|default:""|linebreaksbr }}<br>
+      {% if quotation.customer.phone %}<strong>Phone:</strong> {{ quotation.customer.phone }}<br>{% endif %}
+      <strong>Email:</strong> {{ quotation.customer.email }}<br>
+      {% if quotation.customer.gst_number %}<strong>GST:</strong> {{ quotation.customer.gst_number }}{% endif %}
+    </p>
+  </div>
 
   <table class="table">
-    <thead><tr><th>Product</th><th>Desc</th><th>Qty</th><th>Unit</th><th>Tax %</th><th class="right">Line Total</th></tr></thead>
-    <tbody>
-      {% for it in items %}
+    <thead>
       <tr>
-        <td>{{ it.product.name }}</td>
-        <td>{{ it.description }}</td>
-        <td class="right">{{ it.quantity }}</td>
-        <td class="right">{{ it.unit_price }}</td>
-        <td class="right">{{ it.tax_rate }}</td>
-        <td class="right">{{ it.quantity|floatformat:0|add:""|yesno:"" }}{{ it.quantity|floatformat:0 }}</td>
+        <th>#</th>
+        <th>Item Description</th>
+        <th class="right">Qty</th>
+        <th class="right">Unit Price</th>
+        <th class="right">Tax Rate</th>
+        <th class="right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>
+          <strong>{{ item.product.name }}</strong><br>
+          {{ item.description|default:""|linebreaksbr }}
+        </td>
+        <td class="right">{{ item.quantity }}</td>
+        <td class="right">{{ quotation.currency }} {{ item.unit_price|floatformat:2 }}</td>
+        <td class="right">{{ item.tax_rate|floatformat:2 }}%</td>
+        <td class="right">{{ quotation.currency }} {{ item.total|floatformat:2 }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <h3 class="right">Subtotal: {{ quotation.subtotal }} | Tax: {{ quotation.tax_total }} | Total: {{ quotation.total }}</h3>
+  <div class="totals">
+    <p><strong>Subtotal:</strong> {{ quotation.currency }} {{ quotation.subtotal|floatformat:2 }}</p>
+    <p><strong>Tax:</strong> {{ quotation.currency }} {{ quotation.tax_total|floatformat:2 }}</p>
+    <h3><strong>Total:</strong> {{ quotation.currency }} {{ quotation.total|floatformat:2 }}</h3>
+  </div>
 
   {% if quotation.terms %}
-  <h4>Terms & Conditions</h4>
-  <div>{{ quotation.terms.content_html|safe }}</div>
+  <div class="terms">
+    <h4>Terms & Conditions</h4>
+    <div>{{ quotation.terms.content_html|safe }}</div>
+  </div>
   {% endif %}
+
+  <div class="footer">
+    <p>{{ company.name }} - Thank you for your business!</p>
+    <p>Quotation generated on {% now "d M Y H:i" %}</p>
+  </div>
 </body>
 </html>

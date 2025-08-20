@@ -493,3 +493,60 @@ class QuotationEditView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         quotation = form.save()
         messages.success(self.request, f"Quotation {quotation.quotation_number} updated successfully")
         return redirect("quotations:admin_dashboard")
+
+class GeneratePDFView(QuotationMixin, View):
+    """Generate PDF and return as download"""
+    def post(self, request):
+        form = QuotationForm(request.POST)
+        formset = QuotationItemFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            quotation = form.save(commit=False)
+            # Generate PDF logic
+            pdf_buffer = generate_quotation_pdf(quotation, formset)
+            
+            response = HttpResponse(pdf_buffer, content_type='application/pdf')
+            response['Content-Disposition'] = 'attachment; filename="Quotation.pdf"'
+            return response
+        return JsonResponse({'error': 'Invalid form data'}, status=400)
+
+class SendQuotationView(QuotationMixin, View):
+    """Send quotation via email with PDF attachment"""
+    @transaction.atomic
+    def post(self, request):
+        form = QuotationForm(request.POST)
+        formset = QuotationItemFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            quotation = form.save(commit=False)
+            
+            # 1. Generate PDF
+            pdf_buffer = generate_quotation_pdf(quotation, formset)
+            
+            # 2. Upload to Google Drive
+            drive_service = get_drive_service()
+            file_metadata = {
+                'name': f'Quotation-{quotation.quotation_number}.pdf',
+                'parents': [settings.GOOGLE_DRIVE_FOLDER_ID]
+            }
+            media = MediaIoBaseUpload(pdf_buffer, mimetype='application/pdf')
+            file = drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id,webViewLink'
+            ).execute()
+            
+            # 3. Save Drive link to quotation
+            quotation.drive_file_id = file.get('id')
+            quotation.drive_web_view_link = file.get('webViewLink')
+            quotation.save()
+            
+            # 4. Send email
+            send_quotation_email(quotation, file.get('webViewLink'))
+            
+            return JsonResponse({
+                'success': True,
+                'redirect': reverse('quotations:admin_dashboard')
+            })
+        
+        return JsonResponse({'error': 'Invalid form data'}, status=400)
