@@ -463,6 +463,40 @@ class QuotationSendView(LoginRequiredMixin, BaseAPIView):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 
+class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
+    def post(self, request, quotation_id):
+        quotation = get_object_or_404(Quotation, pk=quotation_id)
+        assigned_to_id = request.json.get('assigned_to_id') or request.POST.get('assigned_to_id')
+        
+        if assigned_to_id:
+            salesperson = get_object_or_404(User, pk=assigned_to_id, role=Roles.SALESPERSON)
+            quotation.assigned_to = salesperson
+            message = f"Quotation assigned to {salesperson.get_full_name()}"
+        else:
+            quotation.assigned_to = None
+            message = "Quotation assignment removed"
+            
+        quotation.save()
+        
+        ActivityLog.log(
+            actor=request.user,
+            action=ActivityAction.QUOTATION_ASSIGNED if assigned_to_id else ActivityAction.QUOTATION_UNASSIGNED,
+            entity=quotation,
+            message=message
+        )
+        
+        return JsonResponse({
+            'success': True, 
+            'message': message,
+            'data': {
+                'assigned_to': {
+                    'id': quotation.assigned_to.id if quotation.assigned_to else None,
+                    'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
+                }
+            }
+        })
+
+
 # ========== Customer & Product Management ==========
 class CustomerListView(LoginRequiredMixin, BaseAPIView):
     def get(self, request):
