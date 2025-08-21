@@ -2,424 +2,786 @@
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-<div class="p-6 bg-gray-50 min-h-screen" x-data="{ 
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50" x-data="{ 
     openModal: null,
     openLeadModal: null,
-    activeTab: window.location.hash ? window.location.hash.replace('#','') : 'salespeople'
-}">
+    activeTab: (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabFromParam = urlParams.get('tab');
+        if (tabFromParam && ['salespeople', 'quotations', 'leads'].includes(tabFromParam)) {
+            return tabFromParam;
+        }
+        if (window.location.hash) {
+            const tabFromHash = window.location.hash.replace('#', '');
+            if (['salespeople', 'quotations', 'leads'].includes(tabFromHash)) {
+                return tabFromHash;
+            }
+        }
+        return 'salespeople';
+    })(),
+    
+    switchTab(tab) {
+        this.activeTab = tab;
+        window.location.hash = tab;
+        // Clear URL parameters when switching tabs
+        const url = new URL(window.location);
+        url.search = '';
+        url.hash = tab;
+        window.history.replaceState({}, '', url);
+    }
+}" x-init="
+    // Watch for hash changes
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash.replace('#', '');
+        if (['salespeople', 'quotations', 'leads'].includes(hash)) {
+            activeTab = hash;
+        }
+    });
+">
 
-    <!-- Header -->
-    <div class="mb-8 flex justify-between items-center">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-            <p class="text-gray-600">Manage sales team and quotations</p>
-        </div>
-        <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg">
-            <span class="font-medium">Today:</span> {% now "F j, Y" %}
-        </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="mb-6 border-b border-gray-200">
-        <nav class="-mb-px flex space-x-8">
-            <button @click="activeTab = 'salespeople'; window.location.hash='salespeople'" 
-                :class="activeTab === 'salespeople' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Sales Team
-            </button>
-            <button @click="activeTab = 'quotations'; window.location.hash='quotations'" 
-                :class="activeTab === 'quotations' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Quotations
-            </button>
-            <button @click="activeTab = 'leads'; window.location.hash='leads'" 
-                :class="activeTab === 'leads' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Manage Leads
-            </button>
-        </nav>
-    </div>
-
-    <!-- Salespeople -->
-    <div x-show="activeTab === 'salespeople'" class="space-y-6">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-semibold text-gray-800">Sales Team Management</h2>
-            <a href="{% url 'quotations:create_salesperson' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
-                Add New Salesperson
-            </a>
-        </div>
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <table class="w-full table-auto">
-                <thead class="bg-gray-100 text-gray-600">
-                    <tr>
-                        <th class="px-6 py-3 text-left">Name</th>
-                        <th class="px-6 py-3 text-left">Email</th>
-                        <th class="px-6 py-3 text-left">Active Quotations</th>
-                        <th class="px-6 py-3 text-left">Active Leads</th>
-                        <th class="px-6 py-3 text-left">Status</th>
-                        <th class="px-6 py-3 text-left">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    {% for user in salespeople %}
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4">{{ user.get_full_name }}</td>
-                        <td class="px-6 py-4">{{ user.email }}</td>
-                        <td class="px-6 py-4">{{ user.quotations.count }}</td>
-                        <td class="px-6 py-4">{{ user.leads.count }}</td>
-                        <td class="px-6 py-4">
-                            <span class="px-2 py-1 rounded-full text-xs font-medium {% if user.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
-                                {% if user.is_active %}Active{% else %}Inactive{% endif %}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 space-x-2">
-                            <a href="{% url 'quotations:edit_salesperson' user.pk %}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Edit</a>
-                            <form method="POST" action="{% url 'quotations:toggle_salesperson_status' user.pk %}" class="inline">
-                                {% csrf_token %}
-                                <button type="submit" class="text-sm font-medium {% if user.is_active %}text-orange-600 hover:text-orange-800{% else %}text-green-600 hover:text-green-800{% endif %}">
-                                    {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">No salespeople found</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- Header with enhanced styling -->
+    <div class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="py-6 flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                        Admin Dashboard
+                    </h1>
+                    <p class="text-gray-600 mt-1">Manage sales team and quotations</p>
+                </div>
+                <div class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl shadow-lg">
+                    <span class="font-medium">Today:</span> {% now "F j, Y" %}
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Quotations -->
-    <div x-show="activeTab === 'quotations'" class="space-y-6">
-        <!-- Header -->
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <h2 class="text-xl font-semibold text-gray-800">All Quotations</h2>
-            <div class="flex gap-2">
-                <a href="{% url 'quotations:admin_create_quotation' %}" 
-                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center whitespace-nowrap">
-                    + Create Quotation
-                </a>
-                <a href="{% url 'quotations:export_csv' %}?status={{ request.GET.status }}&customer={{ request.GET.customer }}&assigned_to={{ request.GET.assigned_to }}&from={{ request.GET.from }}&to={{ request.GET.to }}" 
-                   class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center whitespace-nowrap">
-                    Export CSV
-                </a>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Enhanced Tabs -->
+        <div class="mb-8">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
+                <nav class="flex space-x-2">
+                    <button @click="switchTab('salespeople')" 
+                        :class="activeTab === 'salespeople' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'"
+                        class="flex-1 py-3 px-4 rounded-lg font-medium text-sm transition-all duration-200 flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                        </svg>
+                        Sales Team
+                    </button>
+                    <button @click="switchTab('quotations')" 
+                        :class="activeTab === 'quotations' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'"
+                        class="flex-1 py-3 px-4 rounded-lg font-medium text-sm transition-all duration-200 flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Quotations
+                    </button>
+                    <button @click="switchTab('leads')" 
+                        :class="activeTab === 'leads' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'"
+                        class="flex-1 py-3 px-4 rounded-lg font-medium text-sm transition-all duration-200 flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        Manage Leads
+                    </button>
+                </nav>
             </div>
         </div>
 
-        <!-- Filters -->
-        <div class="bg-white p-4 rounded-lg shadow">
-            <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="quotation-filter-form">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select name="status" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                        <option value="">All Statuses</option>
-                        {% for key, value in status_choices %}
-                        <option value="{{ key }}" {% if request.GET.status == key %}selected{% endif %}>{{ value }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Customer</label>
-                    <select name="customer" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                        <option value="">All Customers</option>
-                        {% for customer in all_customers %}
-                        <option value="{{ customer.id }}" {% if request.GET.customer == customer.id|stringformat:"s" %}selected{% endif %}>{{ customer }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                    <select name="assigned_to" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                        <option value="">All Salespeople</option>
-                        {% for user in salespeople_list %}
-                        <option value="{{ user.id }}" {% if request.GET.assigned_to == user.id|stringformat:"s" %}selected{% endif %}>{{ user }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                    <input type="date" name="from" value="{{ request.GET.from }}" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                    <input type="date" name="to" value="{{ request.GET.to }}" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                </div>
-            </form>
-        </div>
-
-        <!-- Quotations Table -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full table-auto">
-                    <thead class="bg-gray-100 text-gray-600">
-                        <tr>
-                            <th class="px-6 py-3 text-left">#</th>
-                            <th class="px-6 py-3 text-left">Quotation #</th>
-                            <th class="px-6 py-3 text-left">Customer</th>
-                            <th class="px-6 py-3 text-left">Assigned To</th>
-                            <th class="px-6 py-3 text-left">Status</th>
-                            <th class="px-6 py-3 text-left">Total</th>
-                            <th class="px-6 py-3 text-left">Created</th>
-                            <th class="px-6 py-3 text-left">Follow-up</th>
-                            <th class="px-6 py-3 text-left">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        {% for q in quotations %}
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4">{{ forloop.counter }}</td>
-                            <td class="px-6 py-4 font-medium text-blue-600">{{ q.quotation_number }}</td>
-                            <td class="px-6 py-4">{{ q.customer|default:"-" }}</td>
-                            <td class="px-6 py-4">{{ q.assigned_to|default:"Unassigned" }}</td>
-                            <td class="px-6 py-4">
-                                <span class="px-2 py-1 rounded-full text-xs 
-                                    {% if q.status == 'draft' %}bg-gray-100 text-gray-800
-                                    {% elif q.status == 'sent' %}bg-blue-100 text-blue-800
-                                    {% elif q.status == 'approved' %}bg-green-100 text-green-800
-                                    {% elif q.status == 'rejected' %}bg-red-100 text-red-800
-                                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
-                                    {{ q.get_status_display }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 font-medium">{{ q.currency }} {{ q.total }}</td>
-                            <td class="px-6 py-4">{{ q.created_at|date:"d-m-Y" }}</td>
-                            <td class="px-6 py-4">{{ q.follow_up_date|date:"d-m-Y"|default:"-" }}</td>
-                            <td class="px-6 py-4 space-x-2 whitespace-nowrap">
-                                <button @click="openModal = {{ q.id }}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View</button>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="9" class="px-6 py-4 text-center text-gray-500">No quotations found</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <!-- Salespeople Tab -->
+        <div x-show="activeTab === 'salespeople'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-gray-800">Sales Team Management</h2>
+                <a href="{% url 'quotations:create_salesperson' %}" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    Add New Salesperson
+                </a>
             </div>
-        </div>
-
-        <!-- Quotation Detail Modals -->
-        {% for q in quotations %}
-        <div x-show="openModal === {{ q.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-            <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
-                <button @click="openModal = null" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">&times;</button>
-                <h2 class="text-2xl font-bold mb-4">Quotation Details</h2>
-
-                <div class="space-y-2 mb-4">
-                    <p><span class="font-semibold">Quotation Number:</span> {{ q.quotation_number }}</p>
-                    <p><span class="font-semibold">Customer:</span> {{ q.customer.name }}</p>
-                    <p><span class="font-semibold">Status:</span> {{ q.get_status_display }}</p>
-                    <p><span class="font-semibold">Follow-up Date:</span> {{ q.follow_up_date|default:"Not set" }}</p>
-                    <p><span class="font-semibold">Currency:</span> {{ q.currency }}</p>
-                    <p><span class="font-semibold">Subtotal:</span> {{ q.subtotal }}</p>
-                    <p><span class="font-semibold">Tax Total:</span> {{ q.tax_total }}</p>
-                    <p><span class="font-semibold">Total:</span> {{ q.total }}</p>
-                    <p><span class="font-semibold">Google Drive Link:</span> 
-                        {% if q.drive_web_view_link %}
-                            <a href="{{ q.drive_web_view_link }}" target="_blank" class="text-blue-600 hover:underline">View File</a>
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </p>
-                </div>
-
-                <!-- Quotation Items Table -->
-                {% if q.items.exists %}
-                <div class="overflow-x-auto mb-4">
-                    <table class="w-full table-auto border border-gray-200">
-                        <thead class="bg-gray-100">
+            
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
                             <tr>
-                                <th class="px-4 py-2 border">#</th>
-                                <th class="px-4 py-2 border">Item</th>
-                                <th class="px-4 py-2 border">Quantity</th>
-                                <th class="px-4 py-2 border">Unit Price</th>
-                                <th class="px-4 py-2 border">Tax Rate (%)</th>
-                                <th class="px-4 py-2 border">Total</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Name</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Email</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Active Quotations</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Active Leads</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for item in q.items.all %}
+                        <tbody class="divide-y divide-gray-200">
+                            {% for user in salespeople %}
+                            <tr class="hover:bg-blue-50 transition-colors duration-150">
+                                <td class="px-6 py-4 font-medium text-gray-900">{{ user.get_full_name }}</td>
+                                <td class="px-6 py-4 text-gray-600">{{ user.email }}</td>
+                                <td class="px-6 py-4">
+                                    <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                                        {{ user.quotations.count }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                                        {{ user.leads.count }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium {% if user.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                        {% if user.is_active %}Active{% else %}Inactive{% endif %}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="flex space-x-3">
+                                        <a href="{% url 'quotations:edit_salesperson' user.pk %}" class="text-blue-600 hover:text-blue-800 font-medium text-sm">Edit</a>
+                                        <form method="POST" action="{% url 'quotations:toggle_salesperson_status' user.pk %}" class="inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="font-medium text-sm {% if user.is_active %}text-orange-600 hover:text-orange-800{% else %}text-green-600 hover:text-green-800{% endif %}">
+                                                {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
                             <tr>
-                                <td class="px-4 py-2 border">{{ forloop.counter }}</td>
-                                <td class="px-4 py-2 border">{{ item.product.name }}</td>
-                                <td class="px-4 py-2 border">{{ item.quantity }}</td>
-                                <td class="px-4 py-2 border">{{ item.unit_price }}</td>
-                                <td class="px-4 py-2 border">{{ item.tax_rate }}</td>
+                                <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                                    <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                                    </svg>
+                                    No salespeople found
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                {% else %}
-                    <p class="text-gray-500">No items added to this quotation.</p>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- Leads -->
-    <div x-show="activeTab === 'leads'" class="space-y-6">
-        <!-- Header -->
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <h2 class="text-xl font-semibold text-gray-800">All Leads</h2>
-            <div class="flex gap-2">
-                <a href="{% url 'quotations:create_lead' %}" 
-                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center whitespace-nowrap">
-                    + Create Lead
-                </a>
-                <a href="{% url 'quotations:export_csv' %}?lead_status={{ request.GET.lead_status }}&lead_assigned_to={{ request.GET.lead_assigned_to }}&lead_from={{ request.GET.lead_from }}&lead_to={{ request.GET.lead_to }}" 
-                   class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center whitespace-nowrap">
-                    Export CSV
-                </a>
             </div>
         </div>
 
-        <!-- Filters -->
-        <div class="bg-white p-4 rounded-lg shadow">
-            <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="lead-filter-form">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select name="lead_status" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                        <option value="">All Statuses</option>
-                        {% for key, value in lead_status_choices %}
-                        <option value="{{ key }}" {% if request.GET.lead_status == key %}selected{% endif %}>{{ value }}</option>
-                        {% endfor %}
-                    </select>
+        <!-- Quotations Tab -->
+        <div x-show="activeTab === 'quotations'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="space-y-6">
+            <!-- Header -->
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <h2 class="text-2xl font-bold text-gray-800">All Quotations</h2>
+                <div class="flex gap-3">
+                    <a href="{% url 'quotations:admin_create_quotation' %}" 
+                       class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Create Quotation
+                    </a>
+                    <button onclick="exportTableToPDF()" 
+                        class="bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Export PDF
+                </button>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                    <select name="lead_assigned_to" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                        <option value="">All Salespeople</option>
-                        {% for user in salespeople_list %}
-                        <option value="{{ user.id }}" {% if request.GET.lead_assigned_to == user.id|stringformat:"s" %}selected{% endif %}>{{ user }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                    <input type="date" name="lead_from" value="{{ request.GET.lead_from }}" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                    <input type="date" name="lead_to" value="{{ request.GET.lead_to }}" class="w-full border rounded px-3 py-2 text-sm auto-submit">
-                </div>
-            </form>
-        </div>
-
-        <!-- Leads Table -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full table-auto">
-                    <thead class="bg-gray-100 text-gray-600">
-                        <tr>
-                            <th class="px-6 py-3 text-left">#</th>
-                            <th class="px-6 py-3 text-left">Customer</th>
-                            <th class="px-6 py-3 text-left">Assigned To</th>
-                            <th class="px-6 py-3 text-left">Status</th>
-                            <th class="px-6 py-3 text-left">Source</th>
-                            <th class="px-6 py-3 text-left">Created</th>
-                            <th class="px-6 py-3 text-left">Follow-up</th>
-                            <th class="px-6 py-3 text-left">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        {% for lead in leads %}
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4">{{ forloop.counter }}</td>
-                            <td class="px-6 py-4 font-medium text-blue-600">{{ lead.customer.name }}</td>
-                            <td class="px-6 py-4">{{ lead.assigned_to|default:"Unassigned" }}</td>
-                            <td class="px-6 py-4">
-                                <span class="px-2 py-1 rounded-full text-xs 
-                                    {% if lead.status == 'pending' %}bg-gray-100 text-gray-800
-                                    {% elif lead.status == 'in_progress' %}bg-blue-100 text-blue-800
-                                    {% elif lead.status == 'converted' %}bg-green-100 text-green-800
-                                    {% elif lead.status == 'lost' %}bg-red-100 text-red-800
-                                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
-                                    {{ lead.get_status_display }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4">{{ lead.source|default:"-" }}</td>
-                            <td class="px-6 py-4">{{ lead.created_at|date:"d-m-Y" }}</td>
-                            <td class="px-6 py-4">{{ lead.follow_up_date|date:"d-m-Y"|default:"-" }}</td>
-                            <td class="px-6 py-4 space-x-2 whitespace-nowrap">
-                                <button @click="openLeadModal = {{ lead.id }}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View</button>
-                                <a href="{% url 'quotations:edit_lead' lead.pk %}" class="text-green-600 hover:text-green-800 text-sm font-medium">Edit</a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">No leads found</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
             </div>
-        </div>
 
-        <!-- Lead Detail Modals -->
-        {% for lead in leads %}
-        <div x-show="openLeadModal === {{ lead.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-            <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
-                <button @click="openLeadModal = null" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">&times;</button>
-                <h2 class="text-2xl font-bold mb-4">Lead Details</h2>
+            <!-- Enhanced Filters -->
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6" id="quotation-filter-form">
+                    <input type="hidden" name="tab" value="quotations">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                        <select name="status" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                            <option value="">All Statuses</option>
+                            {% for key, value in status_choices %}
+                            <option value="{{ key }}" {% if request.GET.status == key %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Customer</label>
+                        <select name="customer" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                            <option value="">All Customers</option>
+                            {% for customer in all_customers %}
+                            <option value="{{ customer.id }}" {% if request.GET.customer == customer.id|stringformat:"s" %}selected{% endif %}>{{ customer }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Assigned To</label>
+                        <select name="assigned_to" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                            <option value="">All Salespeople</option>
+                            {% for user in salespeople_list %}
+                            <option value="{{ user.id }}" {% if request.GET.assigned_to == user.id|stringformat:"s" %}selected{% endif %}>{{ user }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
+                        <input type="date" name="from" value="{{ request.GET.from }}" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
+                        <input type="date" name="to" value="{{ request.GET.to }}" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                    </div>
+                </form>
+            </div>
 
-                <div class="space-y-2 mb-4">
-                    <p><span class="font-semibold">Customer:</span> {{ lead.customer.name }}</p>
-                    <p><span class="font-semibold">Company:</span> {{ lead.customer.company_name|default:"-" }}</p>
-                    <p><span class="font-semibold">Email:</span> {{ lead.customer.email }}</p>
-                    <p><span class="font-semibold">Phone:</span> {{ lead.customer.phone|default:"-" }}</p>
-                    <p><span class="font-semibold">Status:</span> {{ lead.get_status_display }}</p>
-                    <p><span class="font-semibold">Assigned To:</span> {{ lead.assigned_to|default:"Unassigned" }}</p>
-                    <p><span class="font-semibold">Source:</span> {{ lead.source|default:"-" }}</p>
-                    <p><span class="font-semibold">Follow-up Date:</span> {{ lead.follow_up_date|date:"d-m-Y"|default:"Not set" }}</p>
-                    <p><span class="font-semibold">Created At:</span> {{ lead.created_at|date:"d-m-Y H:i" }}</p>
-                    <p><span class="font-semibold">Created By:</span> {{ lead.created_by.get_full_name|default:"System" }}</p>
+            <!-- Enhanced Quotations Table -->
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
+                            <tr>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">#</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Quotation #</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Customer</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Assigned To</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Total</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Created</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Follow-up</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for q in quotations %}
+                            <tr class="hover:bg-blue-50 transition-colors duration-150">
+                                <td class="px-6 py-4 text-sm text-gray-600">{{ forloop.counter }}</td>
+                                <td class="px-6 py-4 font-semibold text-blue-600">{{ q.quotation_number }}</td>
+                                <td class="px-6 py-4 text-gray-900">{{ q.customer|default:"-" }}</td>
+                                <td class="px-6 py-4 text-gray-600">{{ q.assigned_to|default:"Unassigned" }}</td>
+                                <td class="px-6 py-4">
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium
+                                        {% if q.status == 'draft' %}bg-gray-100 text-gray-800
+                                        {% elif q.status == 'sent' %}bg-blue-100 text-blue-800
+                                        {% elif q.status == 'approved' %}bg-green-100 text-green-800
+                                        {% elif q.status == 'rejected' %}bg-red-100 text-red-800
+                                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                        {{ q.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 font-semibold text-gray-900">{{ q.currency }} {{ q.total }}</td>
+                                <td class="px-6 py-4 text-gray-600">{{ q.created_at|date:"d-m-Y" }}</td>
+                                <td class="px-6 py-4 text-gray-600">{{ q.follow_up_date|date:"d-m-Y"|default:"-" }}</td>
+                                <td class="px-6 py-4">
+                                    <button @click="openModal = {{ q.id }}" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150">
+                                        View Details
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="9" class="px-6 py-8 text-center text-gray-500">
+                                    <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    No quotations found
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+            </div>
 
-                <div class="mt-4">
-                    <h3 class="font-semibold text-lg mb-2">Notes</h3>
-                    <div class="bg-gray-50 p-4 rounded">
-                        {% if lead.notes %}
-                            {{ lead.notes|linebreaks }}
+            <!-- Enhanced Quotation Detail Modals -->
+            {% for q in quotations %}
+            <div x-show="openModal === {{ q.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50 p-4">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <div class="p-6 border-b border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-2xl font-bold text-gray-800">Quotation Details</h2>
+                            <button @click="openModal = null" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Quotation Number</span>
+                                    <p class="text-lg font-semibold text-blue-600">{{ q.quotation_number }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Customer</span>
+                                    <p class="text-lg text-gray-900">{{ q.customer.name }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Status</span>
+                                    <p class="text-lg text-gray-900">{{ q.get_status_display }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Follow-up Date</span>
+                                    <p class="text-lg text-gray-900">{{ q.follow_up_date|default:"Not set" }}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Currency</span>
+                                    <p class="text-lg text-gray-900">{{ q.currency }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Subtotal</span>
+                                    <p class="text-lg text-gray-900">{{ q.subtotal }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Tax Total</span>
+                                    <p class="text-lg text-gray-900">{{ q.tax_total }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Total</span>
+                                    <p class="text-xl font-bold text-green-600">{{ q.total }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if q.drive_web_view_link %}
+                        <div class="mb-6">
+                            <span class="text-sm font-semibold text-gray-500">Google Drive Link</span>
+                            <div class="mt-2">
+                                <a href="{{ q.drive_web_view_link }}" target="_blank" class="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-150">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                    </svg>
+                                    View File
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Quotation Items Table -->
+                        {% if q.items.exists %}
+                        <div class="overflow-x-auto">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Quotation Items</h3>
+                            <table class="w-full border border-gray-200 rounded-lg overflow-hidden">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">#</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Item</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Quantity</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Unit Price</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tax Rate (%)</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    {% for item in q.items.all %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 text-sm text-gray-600">{{ forloop.counter }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900">{{ item.product.name }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900">{{ item.quantity }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900">{{ item.unit_price }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900">{{ item.tax_rate }}</td>
+                                        <td class="px-4 py-3 text-sm font-semibold text-gray-900">{{ item.total_price }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                         {% else %}
-                            <p class="text-gray-500">No notes available for this lead.</p>
+                        <div class="text-center py-8">
+                            <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                            </svg>
+                            <p class="text-gray-500">No items added to this quotation.</p>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
 
-<!-- Auto-submit filters and tab persistence -->
+        <!-- Leads Tab -->
+        <div x-show="activeTab === 'leads'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="space-y-6">
+            <!-- Header -->
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <h2 class="text-2xl font-bold text-gray-800">All Leads</h2>
+                <div class="flex gap-3">
+                    <a href="{% url 'quotations:create_lead' %}" 
+                       class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Create Lead
+                    </a>
+                    <a href="{% url 'quotations:export_csv' %}?lead_status={{ request.GET.lead_status }}&lead_assigned_to={{ request.GET.lead_assigned_to }}&lead_from={{ request.GET.lead_from }}&lead_to={{ request.GET.lead_to }}" 
+                       class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Export CSV
+                    </a>
+                </div>
+            </div>
+
+            <!-- Enhanced Filters -->
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <form method="GET" action="." class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="lead-filter-form">
+                    <input type="hidden" name="tab" value="leads">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                        <select name="lead_status" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                            <option value="">All Statuses</option>
+                            {% for key, value in lead_status_choices %}
+                            <option value="{{ key }}" {% if request.GET.lead_status == key %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Assigned To</label>
+                        <select name="lead_assigned_to" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                            <option value="">All Salespeople</option>
+                            {% for user in salespeople_list %}
+                            <option value="{{ user.id }}" {% if request.GET.lead_assigned_to == user.id|stringformat:"s" %}selected{% endif %}>{{ user }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
+                        <input type="date" name="lead_from" value="{{ request.GET.lead_from }}" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
+                        <input type="date" name="lead_to" value="{{ request.GET.lead_to }}" class="w-full border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent auto-submit">
+                    </div>
+                </form>
+            </div>
+
+            <!-- Enhanced Leads Table -->
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
+                            <tr>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">#</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Customer</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Assigned To</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Source</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Created</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Follow-up</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for lead in leads %}
+                            <tr class="hover:bg-blue-50 transition-colors duration-150">
+                                <td class="px-6 py-4 text-sm text-gray-600">{{ forloop.counter }}</td>
+                                <td class="px-6 py-4 font-semibold text-blue-600">{{ lead.customer.name }}</td>
+                                <td class="px-6 py-4 text-gray-600">{{ lead.assigned_to|default:"Unassigned" }}</td>
+                                <td class="px-6 py-4">
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium 
+                                        {% if lead.status == 'pending' %}bg-gray-100 text-gray-800
+                                        {% elif lead.status == 'in_progress' %}bg-blue-100 text-blue-800
+                                        {% elif lead.status == 'converted' %}bg-green-100 text-green-800
+                                        {% elif lead.status == 'lost' %}bg-red-100 text-red-800
+                                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                        {{ lead.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-gray-600">{{ lead.source|default:"-" }}</td>
+                                <td class="px-6 py-4 text-gray-600">{{ lead.created_at|date:"d-m-Y" }}</td>
+                                <td class="px-6 py-4 text-gray-600">{{ lead.follow_up_date|date:"d-m-Y"|default:"-" }}</td>
+                                <td class="px-6 py-4">
+                                    <div class="flex space-x-2">
+                                        <button @click="openLeadModal = {{ lead.id }}" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-150">
+                                            View
+                                        </button>
+                                        <a href="{% url 'quotations:edit_lead' lead.pk %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-150">
+                                            Edit
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                                    <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                    </svg>
+                                    No leads found
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Enhanced Lead Detail Modals -->
+            {% for lead in leads %}
+            <div x-show="openLeadModal === {{ lead.id }}" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50 p-4">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <div class="p-6 border-b border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-2xl font-bold text-gray-800">Lead Details</h2>
+                            <button @click="openLeadModal = null" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Customer</span>
+                                    <p class="text-lg font-semibold text-blue-600">{{ lead.customer.name }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Company</span>
+                                    <p class="text-lg text-gray-900">{{ lead.customer.company_name|default:"-" }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Email</span>
+                                    <p class="text-lg text-gray-900">{{ lead.customer.email }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Phone</span>
+                                    <p class="text-lg text-gray-900">{{ lead.customer.phone|default:"-" }}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Status</span>
+                                    <p class="text-lg text-gray-900">{{ lead.get_status_display }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Assigned To</span>
+                                    <p class="text-lg text-gray-900">{{ lead.assigned_to|default:"Unassigned" }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Source</span>
+                                    <p class="text-lg text-gray-900">{{ lead.source|default:"-" }}</p>
+                                </div>
+                                <div>
+                                    <span class="text-sm font-semibold text-gray-500">Follow-up Date</span>
+                                    <p class="text-lg text-gray-900">{{ lead.follow_up_date|date:"d-m-Y"|default:"Not set" }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <span class="text-sm font-semibold text-gray-500">Created At</span>
+                                <p class="text-lg text-gray-900">{{ lead.created_at|date:"d-m-Y H:i" }}</p>
+                            </div>
+                            <div>
+                                <span class="text-sm font-semibold text-gray-500">Created By</span>
+                                <p class="text-lg text-gray-900">{{ lead.created_by.get_full_name|default:"System" }}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800 mb-3">Notes</h3>
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                {% if lead.notes %}
+                                    <p class="text-gray-700 whitespace-pre-wrap">{{ lead.notes }}</p>
+                                {% else %}
+                                    <p class="text-gray-500 italic">No notes available for this lead.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Fixed JavaScript with Proper Tab Navigation -->
 <script>
+
+// Enhanced version that detects which tab is active
+function exportTableToPDF() {
+    // Get all possible tab containers
+    const tabs = {
+        salespeople: document.querySelector('[x-show="activeTab === \'salespeople\'"]'),
+        quotations: document.querySelector('[x-show="activeTab === \'quotations\'"]'),
+        leads: document.querySelector('[x-show="activeTab === \'leads\'"]')
+    };
+    
+    // Find which tab is currently visible
+    let activeTab = null;
+    let activeTabName = '';
+    
+    for (const [name, tab] of Object.entries(tabs)) {
+        if (tab && tab.offsetParent !== null) { // Check if element is visible
+            activeTab = tab;
+            activeTabName = name;
+            break;
+        }
+    }
+    
+    if (!activeTab) {
+        alert('No active tab found');
+        return;
+    }
+    
+    const table = activeTab.querySelector('.overflow-x-auto table');
+    if (!table) {
+        alert('No table data found in active tab');
+        return;
+    }
+    
+    // Show loading indicator
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<span>Generating PDF...</span>';
+    button.disabled = true;
+    
+    html2canvas(table).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jspdf.jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        
+        pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth - 20, pdfHeight - 20);
+        
+        // Get current date for filename
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        
+        // Save the PDF with appropriate filename
+        pdf.save(`${activeTabName}-${dateStr}.pdf`);
+        
+        // Restore button text
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }).catch(error => {
+        console.error('Error generating PDF:', error);
+        alert('Error generating PDF. Please try again.');
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+function getActiveTab() {
+    // Check URL parameters first
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabFromParam = urlParams.get('tab');
+    if (tabFromParam && ['salespeople', 'quotations', 'leads'].includes(tabFromParam)) {
+        return tabFromParam;
+    }
+    
+    // Then check hash
+    if (window.location.hash) {
+        const tabFromHash = window.location.hash.replace('#', '');
+        if (['salespeople', 'quotations', 'leads'].includes(tabFromHash)) {
+            return tabFromHash;
+        }
+    }
+    
+    // Default to salespeople
+    return 'salespeople';
+}
+
 document.addEventListener("DOMContentLoaded", function() {
-    // Auto-submit filters
+    // Auto-submit filters with tab persistence
     document.querySelectorAll(".auto-submit").forEach(el => {
         el.addEventListener("change", function() {
             const form = this.closest('form');
-            if (form.id === 'quotation-filter-form') {
-                window.location.hash = "quotations";
-            } else if (form.id === 'lead-filter-form') {
-                window.location.hash = "leads";
+            
+            // Ensure tab parameter is set correctly
+            let tabInput = form.querySelector('input[name="tab"]');
+            if (!tabInput) {
+                tabInput = document.createElement('input');
+                tabInput.type = 'hidden';
+                tabInput.name = 'tab';
+                form.appendChild(tabInput);
             }
+            
+            // Set the current active tab
+            const currentTab = getActiveTab();
+            tabInput.value = currentTab;
+            
+            // Update hash before submission
+            window.location.hash = currentTab;
+            
+            // Submit form
             form.submit();
         });
     });
 
-    // Persist tab on page load
-    if (window.location.hash) {
-        const tab = window.location.hash.replace('#', '');
-        if (['salespeople', 'quotations', 'leads'].includes(tab)) {
-            document.querySelector(`[x-data]`).__x.$data.activeTab = tab;
-        }
+    // Initialize tab from URL on page load
+    const initialTab = getActiveTab();
+    if (window.location.hash !== '#' + initialTab) {
+        window.location.hash = initialTab;
     }
 });
 </script>
 
 <script src="//unpkg.com/alpinejs" defer></script>
+
+<style>
+/* Enhanced animations and hover effects */
+.transition-all {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+}
+
+/* Custom gradient backgrounds */
+.bg-gradient-to-r {
+    background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+
+.from-blue-500 {
+    --tw-gradient-from: #3b82f6;
+    --tw-gradient-to: rgb(59 130 246 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.to-purple-600 {
+    --tw-gradient-to: #9333ea;
+}
+
+.hover\:from-blue-600:hover {
+    --tw-gradient-from: #2563eb;
+}
+
+.hover\:to-purple-700:hover {
+    --tw-gradient-to: #7c3aed;
+}
+
+.from-green-500 {
+    --tw-gradient-from: #10b981;
+    --tw-gradient-to: rgb(16 185 129 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.to-emerald-600 {
+    --tw-gradient-to: #059669;
+}
+
+.hover\:from-green-600:hover {
+    --tw-gradient-from: #059669;
+}
+
+.hover\:to-emerald-700:hover {
+    --tw-gradient-to: #047857;
+}
+
+/* Enhanced shadow effects */
+.shadow-2xl {
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}
+
+/* Smooth modal transitions */
+[x-transition] {
+    transition-property: opacity, transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+}
+</style>
+
 {% endblock %}
