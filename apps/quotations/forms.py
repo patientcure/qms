@@ -8,7 +8,7 @@ from apps.accounts.models import User,Roles
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
-        fields = ["name", "company_name", "email", "phone", "address", "gst_number"]
+        fields = ["name", "company_name", "email", "phone", "address", "gst_number","title","website","primary_address","billing_address","shipping_address"]
 
 class ProductForm(forms.ModelForm):
     class Meta:

@@ -28,6 +28,11 @@ class CompanyProfile(TimestampedModel):
 
 class Customer(TimestampedModel):
     name = models.CharField(max_length=255)
+    title = models.CharField(max_length=100, blank=True)
+    website = models.CharField(max_length=100, blank=True)
+    primary_address = models.CharField(max_length=255, blank=True)
+    billing_address = models.CharField(max_length=255, blank=True)
+    shipping_address = models.CharField(max_length=255, blank=True)
     company_name = models.CharField(max_length=255, blank=True)
     email = models.EmailField()
     phone = models.CharField(max_length=50, blank=True)

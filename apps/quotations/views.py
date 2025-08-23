@@ -21,15 +21,48 @@ from .forms import (
 from .choices import ActivityAction
 from .utils import send_and_archive_quotation
 
+from django.http import JsonResponse
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 
-class AdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
-    def test_func(self):
-        return self.request.user.role == Roles.ADMIN
+class JWTAuthMixin:
+    """Base mixin to authenticate requests using JWT access token."""
+
+    def dispatch(self, request, *args, **kwargs):
+        authenticator = JWTAuthentication()
+        try:
+            user, _ = authenticator.authenticate(request)
+            if user is None:
+                return JsonResponse({"error": "Authentication required"}, status=401)
+            request.user = user
+        except AuthenticationFailed:
+            return JsonResponse({"error": "Invalid or expired token"}, status=401)
+
+        return super().dispatch(request, *args, **kwargs)
 
 
-class SalespersonRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
-    def test_func(self):
-        return self.request.user.role == Roles.SALESPERSON
+class AdminRequiredMixin(JWTAuthMixin):
+    def dispatch(self, request, *args, **kwargs):
+        # First run JWT authentication
+        response = super().dispatch(request, *args, **kwargs)
+        if isinstance(response, JsonResponse):  # means authentication failed
+            return response
+
+        if not (request.user and getattr(request.user, "role", None) == "ADMIN"):
+            return JsonResponse({"error": "Admin access required"}, status=403)
+        return super(JWTAuthMixin, self).dispatch(request, *args, **kwargs)
+
+
+class SalespersonRequiredMixin(JWTAuthMixin):
+    def dispatch(self, request, *args, **kwargs):
+        # First run JWT authentication
+        response = super().dispatch(request, *args, **kwargs)
+        if isinstance(response, JsonResponse):  # means authentication failed
+            return response
+
+        if not (request.user and getattr(request.user, "role", None) == "SALESPERSON"):
+            return JsonResponse({"error": "Salesperson access required"}, status=403)
+        return super(JWTAuthMixin, self).dispatch(request, *args, **kwargs)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -498,7 +531,7 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
 
 
 # ========== Customer & Product Management ==========
-class CustomerListView(LoginRequiredMixin, BaseAPIView):
+class CustomerListView(AdminRequiredMixin, BaseAPIView):
     def get(self, request):
         customers = Customer.objects.all()
         data = []
@@ -507,6 +540,7 @@ class CustomerListView(LoginRequiredMixin, BaseAPIView):
                 'id': customer.id,
                 'name': customer.name,
                 'email': customer.email,
+                'company_name': customer.company_name,
                 'phone': customer.phone,
                 'address': customer.address,
                 'created_at': customer.created_at
@@ -514,7 +548,7 @@ class CustomerListView(LoginRequiredMixin, BaseAPIView):
         return JsonResponse({'data': data})
 
 
-class CustomerCreateView(LoginRequiredMixin, BaseAPIView):
+class CustomerCreateView(AdminRequiredMixin, BaseAPIView):
     def post(self, request):
         form_data = {**request.POST.dict(), **request.json}
         form = CustomerForm(form_data)
@@ -534,7 +568,7 @@ class CustomerCreateView(LoginRequiredMixin, BaseAPIView):
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
 
-class CustomerDetailView(LoginRequiredMixin, BaseAPIView):
+class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
     def get(self, request, customer_id):
         customer = get_object_or_404(Customer, pk=customer_id)
         return JsonResponse({
@@ -544,7 +578,13 @@ class CustomerDetailView(LoginRequiredMixin, BaseAPIView):
                 'email': customer.email,
                 'phone': customer.phone,
                 'address': customer.address,
-                'created_at': customer.created_at
+                'company_name': customer.company_name,
+                'created_at': customer.created_at,
+                'gst_number': customer.gst_number,
+                'title': customer.title,
+                'website': customer.website,
+                'primary_address': customer.primary_address,
+                'billing_address': customer.billing_address,
             }
         })
 

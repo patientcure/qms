@@ -10,8 +10,29 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.quotations.models import Quotation, ActivityAction, ActivityLog, QuotationStatus, Lead
 from datetime import datetime
 import json
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
+class ProtectedView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return JsonResponse({
+            'success': True,
+            'message': f'Hello {request.user.username}, authenticated via JWT access token!'
+        })
 
 User = get_user_model()
+from rest_framework_simplejwt.tokens import RefreshToken
+
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }
+
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -36,17 +57,15 @@ class AdminLoginView(BaseAPIView):
         password = request.json.get("password") or request.POST.get("password")
         
         if not username or not password:
-            return JsonResponse({
-                'success': False, 
-                'error': 'Username and password are required'
-            }, status=400)
+            return JsonResponse({'success': False, 'error': 'Username and password are required'}, status=400)
         
         user = authenticate(request, username=username, password=password)
         if user and user.role == "ADMIN":
-            login(request, user)
+            tokens = get_tokens_for_user(user)
             return JsonResponse({
                 'success': True,
                 'message': 'Login successful',
+                'tokens': tokens,
                 'data': {
                     'user': {
                         'id': user.id,
@@ -59,29 +78,24 @@ class AdminLoginView(BaseAPIView):
                 }
             })
         else:
-            return JsonResponse({
-                'success': False, 
-                'error': 'Invalid credentials or insufficient permissions'
-            }, status=401)
+            return JsonResponse({'success': False, 'error': 'Invalid credentials or insufficient permissions'}, status=401)
 
 
 class SalespersonLoginView(BaseAPIView):
     def post(self, request):
         username = request.json.get("username") or request.POST.get("username")
         password = request.json.get("password") or request.POST.get("password")
-        
+
         if not username or not password:
-            return JsonResponse({
-                'success': False, 
-                'error': 'Username and password are required'
-            }, status=400)
-        
+            return JsonResponse({'success': False, 'error': 'Username and password are required'}, status=400)
+
         user = authenticate(request, username=username, password=password)
         if user and user.role == "SALESPERSON":
-            login(request, user)
+            tokens = get_tokens_for_user(user)
             return JsonResponse({
                 'success': True,
                 'message': 'Login successful',
+                'tokens': tokens,
                 'data': {
                     'user': {
                         'id': user.id,
@@ -95,10 +109,7 @@ class SalespersonLoginView(BaseAPIView):
                 }
             })
         else:
-            return JsonResponse({
-                'success': False, 
-                'error': 'Invalid credentials or insufficient permissions'
-            }, status=401)
+            return JsonResponse({'success': False, 'error': 'Invalid credentials or insufficient permissions'}, status=401)
 
 
 class CreateAdminView(BaseAPIView):
@@ -164,15 +175,17 @@ class CreateAdminView(BaseAPIView):
             }, status=400)
 
 
-class LogoutView(LoginRequiredMixin, View):
+
+class LogoutView(BaseAPIView):
     def post(self, request):
-        user_role = getattr(request.user, 'role', None)
-        logout(request)
-        return JsonResponse({
-            'success': True,
-            'message': 'Logged out successfully',
-            'data': {'previous_role': user_role}
-        })
+        try:
+            refresh_token = request.json.get("refresh")
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return JsonResponse({'success': True, 'message': 'Logged out successfully'})
+        except Exception:
+            return JsonResponse({'success': False, 'error': 'Invalid refresh token'}, status=400)
+
 
 
 class CurrentUserView(LoginRequiredMixin, View):
