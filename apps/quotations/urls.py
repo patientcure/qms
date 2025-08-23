@@ -17,6 +17,7 @@ from .views import (
     QuotationDetailView,
     QuotationSendView,
     QuotationAssignView,
+    QuotationPDFView,
     
     # Customer Management
     CustomerListView,
@@ -53,6 +54,8 @@ urlpatterns = [
     path('api/quotations/<int:quotation_id>/', QuotationDetailView.as_view(), name='quotation_detail'),
     path('api/quotations/<int:quotation_id>/send/', QuotationSendView.as_view(), name='quotation_send'),
     path('api/quotations/<int:quotation_id>/assign/', QuotationAssignView.as_view(), name='quotation_assign'),
+    path('api/quotations/<int:quotation_id>/pdf/', QuotationPDFView.as_view(), name='quotation_pdf'),
+
     
     # ========== Customer Management API ==========
     path('api/customers/', CustomerListView.as_view(), name='customer_list'),

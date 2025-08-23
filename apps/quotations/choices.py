@@ -84,3 +84,16 @@ class NotificationType(models.TextChoices):
     FOLLOW_UP_REMINDER = 'FOLLOW_UP_REMINDER', _('Follow-up Reminder')
     QUOTATION_EXPIRY = 'QUOTATION_EXPIRY', _('Quotation Expiry')
     SYSTEM_ALERT = 'SYSTEM_ALERT', _('System Alert')
+
+CATEGORY_CHOICES = [
+('hardware', 'Hardware'),
+('software', 'Software'),
+('electronics', 'Electronics'),
+('accessories', 'Accessories'),
+]
+UNIT_CHOICES = [
+('piece', 'Piece'),
+('kg', 'Kilogram'),
+('liter', 'Liter'),
+('meter', 'Meter'),
+]

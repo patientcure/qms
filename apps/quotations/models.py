@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
-from .choices import LeadStatus, QuotationStatus, ActivityAction
+from .choices import LeadStatus, QuotationStatus, ActivityAction,CATEGORY_CHOICES,UNIT_CHOICES
 from apps.quotations.utils import generate_next_quotation_number
 User = settings.AUTH_USER_MODEL
 
@@ -48,16 +48,35 @@ class Customer(TimestampedModel):
     def __str__(self):
         return f"{self.name} ({self.company_name})" if self.company_name else self.name
 
-class Product(TimestampedModel):
-    name = models.CharField(max_length=255)
-    sku = models.CharField(max_length=100, blank=True)
+class Product(models.Model):
+    # Basic Information
+    name = models.CharField(max_length=255) 
     description = models.TextField(blank=True)
-    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))  # %
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES,blank=True)
+    
+    # Pricing & Tax
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)
+    selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)  # %
+    profit_margin = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)  # %
+    
+    unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default='piece')
+    
+    # Additional Details
+    weight = models.DecimalField(max_digits=8, decimal_places=3, null=True, blank=True)
+    dimensions = models.CharField(max_length=100, blank=True)
+    warranty_months = models.IntegerField(null=True, blank=True)
+    brand = models.CharField(max_length=100, blank=True)
+    is_available = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
+    
     class Meta:
-        indexes = [models.Index(fields=['name']), models.Index(fields=['sku'])]
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['category']),
+        ]
 
     def __str__(self):
         return self.name

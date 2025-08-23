@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from decimal import Decimal
 import json
+from .pdf_service import save_quotation_pdf
 from apps.accounts.models import User, Roles
 from .models import (
     Quotation, Lead, Customer, Product,
@@ -30,13 +31,14 @@ class JWTAuthMixin:
 
     def dispatch(self, request, *args, **kwargs):
         authenticator = JWTAuthentication()
-        try:
-            user, _ = authenticator.authenticate(request)
-            if user is None:
-                return JsonResponse({"error": "Authentication required"}, status=401)
-            request.user = user
-        except AuthenticationFailed:
-            return JsonResponse({"error": "Invalid or expired token"}, status=401)
+        result = authenticator.authenticate(request)
+
+        if result is None:
+            from rest_framework.exceptions import AuthenticationFailed
+            raise AuthenticationFailed("Authentication credentials were not provided or invalid.")
+
+        user, _ = result
+        request.user = user 
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -334,7 +336,7 @@ class QuotationListView(LoginRequiredMixin, BaseAPIView):
         return JsonResponse({'data': data})
 
 
-class QuotationCreateView(LoginRequiredMixin, BaseAPIView):
+class QuotationCreateView(BaseAPIView):
     @transaction.atomic
     def post(self, request):
         form_data = {**request.POST.dict(), **request.json}
@@ -359,16 +361,27 @@ class QuotationCreateView(LoginRequiredMixin, BaseAPIView):
                 message="Created via API"
             )
             
-            return JsonResponse({
+            # Generate and save PDF
+            try:
+                pdf_path, pdf_url = save_quotation_pdf(quotation, request)
+            except Exception as e:
+                # Log error but don't fail the request
+                pdf_url = None
+                print(f"PDF generation failed: {str(e)}")
+            
+            response_data = {
                 'success': True,
                 'message': f"Quotation {quotation.quotation_number} created successfully",
                 'data': {
                     'id': quotation.id,
                     'quotation_number': quotation.quotation_number,
                     'status': quotation.status,
-                    'total': float(quotation.total)
+                    'total': float(quotation.total),
+                    'pdf_url': pdf_url  # Always include, even if None
                 }
-            }, status=201)
+            }
+            
+            return JsonResponse(response_data, status=201)
             
         errors = {}
         if form.errors:
@@ -377,6 +390,30 @@ class QuotationCreateView(LoginRequiredMixin, BaseAPIView):
             errors['formset'] = formset.errors
         return JsonResponse({'success': False, 'errors': errors}, status=400)
 
+
+class QuotationPDFView(BaseAPIView):
+    def get(self, request, quotation_id):
+        quotation = get_object_or_404(Quotation, pk=quotation_id)
+        
+        # Check permission
+        if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+        
+        try:
+            pdf_path, pdf_url = save_quotation_pdf(quotation, request)
+            
+            return JsonResponse({
+                'success': True,
+                'data': {
+                    'pdf_url': pdf_url,
+                    'quotation_number': quotation.quotation_number
+                }
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f"Failed to generate PDF: {str(e)}"
+            }, status=500)
 
 class QuotationDetailView(LoginRequiredMixin, BaseAPIView):
     def get(self, request, quotation_id):
@@ -616,7 +653,7 @@ class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
         })
 
 
-class ProductListView(LoginRequiredMixin, BaseAPIView):
+class ProductListView(JWTAuthMixin, BaseAPIView):
     def get(self, request):
         products = Product.objects.all()
         data = []
@@ -624,16 +661,24 @@ class ProductListView(LoginRequiredMixin, BaseAPIView):
             data.append({
                 'id': product.id,
                 'name': product.name,
-                'unit_price': float(product.unit_price),
+                'category': product.category,
+                'cost_price': float(product.cost_price),
+                'selling_price': float(product.selling_price),
                 'tax_rate': float(product.tax_rate),
+                'profit_margin': float(product.profit_margin),
+                'unit': product.unit,
                 'description': product.description,
-                'is_active': product.is_active,
+                'is_available': product.is_available,
+                'active': product.active,
+                'brand': product.brand,
+                'weight': float(product.weight) if product.weight else None,
+                'warranty_months': product.warranty_months,
                 'created_at': product.created_at
             })
         return JsonResponse({'data': data})
 
 
-class ProductCreateView(LoginRequiredMixin, BaseAPIView):
+class ProductCreateView(JWTAuthentication, BaseAPIView):
     def post(self, request):
         form_data = {**request.POST.dict(), **request.json}
         form = ProductForm(form_data)
@@ -646,24 +691,37 @@ class ProductCreateView(LoginRequiredMixin, BaseAPIView):
                 'data': {
                     'id': product.id,
                     'name': product.name,
-                    'unit_price': float(product.unit_price),
-                    'tax_rate': float(product.tax_rate)
+                    'category': product.category,
+                    'cost_price': float(product.cost_price),
+                    'selling_price': float(product.selling_price),
+                    'tax_rate': float(product.tax_rate),
+                    'profit_margin': float(product.profit_margin),
+                    'unit': product.unit
                 }
             }, status=201)
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
 
-class ProductDetailView(LoginRequiredMixin, BaseAPIView):
+class ProductDetailView(JWTAuthMixin, BaseAPIView):
     def get(self, request, product_id):
         product = get_object_or_404(Product, pk=product_id)
         return JsonResponse({
             'data': {
                 'id': product.id,
                 'name': product.name,
-                'unit_price': float(product.unit_price),
+                'category': product.category,
+                'cost_price': float(product.cost_price),
+                'selling_price': float(product.selling_price),
                 'tax_rate': float(product.tax_rate),
+                'profit_margin': float(product.profit_margin),
+                'unit': product.unit,
                 'description': product.description,
-                'is_active': product.is_active,
+                'weight': float(product.weight) if product.weight else None,
+                'dimensions': product.dimensions,
+                'warranty_months': product.warranty_months,
+                'brand': product.brand,
+                'is_available': product.is_available,
+                'active': product.active,
                 'created_at': product.created_at
             }
         })
@@ -681,22 +739,25 @@ class ProductDetailView(LoginRequiredMixin, BaseAPIView):
                 'data': {
                     'id': product.id,
                     'name': product.name,
-                    'unit_price': float(product.unit_price),
-                    'tax_rate': float(product.tax_rate)
+                    'category': product.category,
+                    'cost_price': float(product.cost_price),
+                    'selling_price': float(product.selling_price),
+                    'tax_rate': float(product.tax_rate),
+                    'profit_margin': float(product.profit_margin),
+                    'unit': product.unit
                 }
             })
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
     def delete(self, request, product_id):
         product = get_object_or_404(Product, pk=product_id)
-        product.is_active = False
+        product.active = False
         product.save()
         return JsonResponse({
             'success': True,
             'message': 'Product deactivated successfully',
-            'data': {'is_active': product.is_active}
+            'data': {'active': product.active}
         })
-
 
 # ========== Dashboard Data ==========
 class AdminDashboardStatsView(AdminRequiredMixin, BaseAPIView):

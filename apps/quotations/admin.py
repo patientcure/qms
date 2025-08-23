@@ -12,7 +12,7 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'sku', 'unit_price', 'tax_rate', 'active')
+    list_display = ('name',  'tax_rate', 'active')
     list_filter = ('active',)
     search_fields = ('name', 'sku')
 

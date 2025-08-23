@@ -13,8 +13,11 @@ class CustomerForm(forms.ModelForm):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ["name", "sku", "description", "unit_price", "tax_rate", "active"]
-
+        fields = [
+            "name", "description", "category", "cost_price", 
+            "selling_price", "tax_rate", "unit", "weight", 
+            "dimensions", "warranty_months", "brand", "is_available", "active"
+        ]
 class QuotationItemForm(forms.ModelForm):
     class Meta:
         model = QuotationItem
