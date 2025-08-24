@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import View
 from django.shortcuts import get_object_or_404
@@ -609,7 +610,47 @@ class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
             'message': 'Customer deleted successfully'
         })
 
+class ProductSearchView(JWTAuthMixin, BaseAPIView):
+    def get(self, request):
+        name = request.GET.get('name', '').strip()
+        if not name:
+            return JsonResponse({'error': 'Missing "name" parameter'}, status=400)
+        products = Product.objects.filter(Q(name__icontains=name))
+        data = []
+        for product in products:
+            data.append({
+                'id': product.id,
+                'name': product.name,
+                'category': product.category,
+                'cost_price': float(product.cost_price),
+                'selling_price': float(product.selling_price),
+                'tax_rate': float(product.tax_rate),
+                'unit': product.unit,
+                'description': product.description,
+                'is_available': product.is_available,
+                'active': product.active,
+                'brand': product.brand
+            })
+        return JsonResponse({'data': data})
 
+class CustomerSearchView(JWTAuthMixin, BaseAPIView):
+    def get(self, request):
+        name = request.GET.get('name', '').strip()
+        if not name:
+            return JsonResponse({'error': 'Missing "name" parameter'}, status=400)
+        customers = Customer.objects.filter(Q(name__icontains=name))
+        data = []
+        for customer in customers:
+            data.append({
+                'id': customer.id,
+                'name': customer.name,
+                'email': customer.email,
+                'company_name': customer.company_name,
+                'phone': customer.phone,
+                'address': customer.address
+            })
+        return JsonResponse({'data': data})
+    
 class ProductListView(JWTAuthMixin, BaseAPIView):
     def get(self, request):
         products = Product.objects.all()

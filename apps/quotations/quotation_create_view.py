@@ -9,123 +9,152 @@ from .choices import ActivityAction
 from .utils import send_and_archive_quotation
 from .save_quotation import save_quotation_pdf
 from .views import BaseAPIView
-
+from .forms import CustomerForm
+from .models import Customer
 logger = logging.getLogger(__name__)
 
 class QuotationCreateView(BaseAPIView):
     @transaction.atomic
     def post(self, request):
-        try:
-            request_json = getattr(request, 'json', {})
-            if not request_json:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'JSON data is required'
-                }, status=400)
-            
-            form_data = {**request.POST.dict(), **request_json}
-            
-            quotation_data = {k: v for k, v in form_data.items() 
-                            if k not in ['items', 'terms', 'send_immediately', 'auto_assign']}
-            
-            required_fields = ['customer', 'status']
-            missing_fields = [field for field in required_fields 
-                            if field not in quotation_data or not quotation_data[field]]
-            if missing_fields:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Missing required fields: {missing_fields}'
-                }, status=400)
-            
-            items_data = request_json.get('items', [])
-            if not items_data:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'At least one item is required'
-                }, status=400)
-            
-            for i, item in enumerate(items_data):
-                if 'product' not in item:
+            try:
+                request_json = getattr(request, 'json', {})
+                if not request_json:
                     return JsonResponse({
                         'success': False,
-                        'error': f'Item {i} missing product field'
+                        'error': 'JSON data is required'
                     }, status=400)
-                if 'quantity' not in item:
+
+                form_data = {**request.POST.dict(), **request_json}
+
+                # --- Customer Handling ---
+                customer_data = form_data.get('customer', {})
+                if not isinstance(customer_data, dict):
+                    customer_data = {}
+                phone = customer_data.get('phone')
+                if not phone:
                     return JsonResponse({
                         'success': False,
-                        'error': f'Item {i} missing quantity field'
+                        'error': 'Customer phone is required'
                     }, status=400)
-            
-            terms_data = request_json.get('terms', [])
-            valid_term_ids = self._validate_terms(terms_data)
-            
-            formset_data = self._prepare_formset_data(items_data)
-            all_data = {**quotation_data, **formset_data}
-            
-            send_immediately = request_json.get('send_immediately', False)
-            auto_assign = request_json.get('auto_assign', True)
-            
-            form = QuotationForm(quotation_data)
-            formset = QuotationItemFormSet(all_data, prefix='items')
-            
-            if not (form.is_valid() and formset.is_valid()):
-                return self._handle_validation_errors(form, formset)
-            
-            quotation = form.save(commit=False)
-            
-            if not quotation.assigned_to and auto_assign:
-                quotation.auto_assign_if_needed()
-            
-            quotation.save()
-            
-            formset.instance = quotation
-            formset.save()
-            
-            try:
-                quotation.recalculate_totals()
+
+
+                customer = Customer.objects.filter(phone=phone).first()
+                if customer:
+                    customer_id = customer.id
+                else:
+                    customer_form = CustomerForm(customer_data)
+                    if not customer_form.is_valid():
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invalid customer data',
+                            'customer_errors': customer_form.errors
+                        }, status=400)
+                    customer = customer_form.save()
+                    customer_id = customer.id
+
+                # --- Quotation Handling ---
+                quotation_data = {k: v for k, v in form_data.items() 
+                                  if k not in ['items', 'terms', 'send_immediately', 'auto_assign', 'customer']}
+                quotation_data['customer'] = customer_id
+
+                required_fields = ['customer', 'status']
+                missing_fields = [field for field in required_fields 
+                                  if field not in quotation_data or not quotation_data[field]]
+                if missing_fields:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Missing required fields: {missing_fields}'
+                    }, status=400)
+
+                items_data = request_json.get('items', [])
+                if not items_data:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'At least one item is required'
+                    }, status=400)
+
+                for i, item in enumerate(items_data):
+                    if 'product' not in item:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Item {i} missing product field'
+                        }, status=400)
+                    if 'quantity' not in item:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Item {i} missing quantity field'
+                        }, status=400)
+
+                terms_data = request_json.get('terms', [])
+                valid_term_ids = self._validate_terms(terms_data)
+
+                formset_data = self._prepare_formset_data(items_data)
+                all_data = {**quotation_data, **formset_data}
+
+                send_immediately = request_json.get('send_immediately', False)
+                auto_assign = request_json.get('auto_assign', True)
+
+                form = QuotationForm(quotation_data)
+                formset = QuotationItemFormSet(all_data, prefix='items')
+
+                if not (form.is_valid() and formset.is_valid()):
+                    return self._handle_validation_errors(form, formset)
+
+                quotation = form.save(commit=False)
+
+                if not quotation.assigned_to and auto_assign:
+                    quotation.auto_assign_if_needed()
+
+                quotation.save()
+
+                formset.instance = quotation
+                formset.save()
+
+                try:
+                    quotation.recalculate_totals()
+                except Exception as e:
+                    logger.error(f"Failed to recalculate quotation totals: {str(e)}")
+
+                if hasattr(request, 'user') and request.user.is_authenticated:
+                    ActivityLog.log(
+                        actor=request.user,
+                        action=ActivityAction.QUOTATION_CREATED,
+                        entity=quotation,
+                        message="Created via API"
+                    )
+
+                pdf_url = None
+                try:
+                    pdf_path, pdf_url = save_quotation_pdf(quotation, request, terms=valid_term_ids)
+                except Exception as e:
+                    logger.error(f"PDF generation failed: {str(e)}")
+
+                if send_immediately:
+                    send_and_archive_quotation(quotation)
+                    quotation.refresh_from_db()
+
+                quotation_data = self._get_quotation_response_data(quotation, valid_term_ids)
+                quotation_data['pdf_url'] = pdf_url
+
+                return JsonResponse({
+                    'success': True,
+                    'message': f"Quotation {quotation.quotation_number} created successfully",
+                    'data': quotation_data
+                }, status=201)
+
             except Exception as e:
-                logger.error(f"Failed to recalculate quotation totals: {str(e)}")
-            
-            if hasattr(request, 'user') and request.user.is_authenticated:
-                ActivityLog.log(
-                    actor=request.user,
-                    action=ActivityAction.QUOTATION_CREATED,
-                    entity=quotation,
-                    message="Created via API"
-                )
-            
-            pdf_url = None
-            try:
-                pdf_path, pdf_url = save_quotation_pdf(quotation, request, terms=valid_term_ids)
-            except Exception as e:
-                logger.error(f"PDF generation failed: {str(e)}")
-            
-            if send_immediately:
-                send_and_archive_quotation(quotation)
-                quotation.refresh_from_db()
-            
-            quotation_data = self._get_quotation_response_data(quotation, valid_term_ids)
-            quotation_data['pdf_url'] = pdf_url
-            
-            return JsonResponse({
-                'success': True,
-                'message': f"Quotation {quotation.quotation_number} created successfully",
-                'data': quotation_data
-            }, status=201)
-            
-        except Exception as e:
-            logger.error(f"Error in QuotationCreateView: {str(e)}", exc_info=True)
-            
-            error_response = {
-                'success': False,
-                'error': f"Internal server error: {str(e)}"
-            }
-            
-            if settings.DEBUG:
-                import traceback
-                error_response['debug_info'] = traceback.format_exc()
-            
-            return JsonResponse(error_response, status=500)
+                logger.error(f"Error in QuotationCreateView: {str(e)}", exc_info=True)
+
+                error_response = {
+                    'success': False,
+                    'error': f"Internal server error: {str(e)}"
+                }
+
+                if settings.DEBUG:
+                    import traceback
+                    error_response['debug_info'] = traceback.format_exc()
+
+                return JsonResponse(error_response, status=500)
     
     def _validate_terms(self, terms_data):
         if not terms_data:

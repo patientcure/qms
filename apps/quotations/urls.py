@@ -40,6 +40,9 @@ from .views import (
     # Dashboard Stats
     AdminDashboardStatsView,
     SalespersonDashboardStatsView,
+    # Product & Customer Search
+    ProductSearchView,
+    CustomerSearchView,
 )
 
 app_name = "quotations"
@@ -64,15 +67,16 @@ urlpatterns = [
     path('api/quotations/<int:quotation_id>/assign/', QuotationAssignView.as_view(), name='quotation_assign'),
     path('api/quotations/<int:quotation_id>/pdf/', QuotationPDFView.as_view(), name='quotation_pdf'),
     
-    # ========== Customer Management API ==========
-    path('api/customers/', CustomerListView.as_view(), name='customer_list'),
-    path('api/customers/create/', CustomerCreateView.as_view(), name='customer_create'),
-    path('api/customers/<int:customer_id>/', CustomerDetailView.as_view(), name='customer_detail'),
-    
     # ========== Product Management API ==========
     path('api/products/', ProductListView.as_view(), name='product_list'),
     path('api/products/create/', ProductCreateView.as_view(), name='product_create'),
     path('api/products/<int:product_id>/', ProductDetailView.as_view(), name='product_detail'),
+    path('api/products/search/', ProductSearchView.as_view(), name='product_search'),
+    # ========== Customer Management API ==========
+    path('api/customers/', CustomerListView.as_view(), name='customer_list'),
+    path('api/customers/create/', CustomerCreateView.as_view(), name='customer_create'),
+    path('api/customers/<int:customer_id>/', CustomerDetailView.as_view(), name='customer_detail'),
+    path('api/customers/search/', CustomerSearchView.as_view(), name='customer_search'),
     
     # ========== Dashboard Stats API ==========
     path('api/dashboard/admin/stats/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
