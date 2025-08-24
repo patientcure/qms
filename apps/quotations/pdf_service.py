@@ -399,27 +399,32 @@ class QuotationPDFGenerator:
         if terms_to_display:
             elements.append(Paragraph("Terms & Conditions:", self.section_heading_style))
             
-            terms_content = ""
-            for idx, term in enumerate(terms_to_display, 1):
-                terms_content += f"{idx}. <b>{term.title}:</b> "
+            for term in terms_to_display:
+                elements.append(Paragraph(term.title, self.terms_heading_style))
                 content = getattr(term, 'content_html', '') or str(getattr(term, 'content', ''))
                 if content:
-                    # Clean HTML content
-                    clean_content = self._clean_html_content(content)
-                    terms_content += f"{clean_content}<br/><br/>"
-            
-            if terms_content:
-                elements.append(Paragraph(terms_content, self.terms_content_style))
+                    # Extract bullet points from stars and normal text
+                    bullet_points = re.findall(r'\*(.*?)\*', content)
+                    normal_text = re.sub(r'\*(.*?)\*', '', content).strip()
+                    
+                    # Add normal text first if exists
+                    if normal_text:
+                        clean_normal_text = self._clean_html_content(normal_text)
+                        if clean_normal_text:
+                            elements.append(Paragraph(clean_normal_text, self.terms_content_style))
+                    
+                    # Add bullet points if exists
+                    if bullet_points:
+                        bullet_items = [ListItem(Paragraph(bp.strip(), self.terms_content_style)) for bp in bullet_points]
+                        elements.append(ListFlowable(bullet_items, bulletType='bullet', leftIndent=10 * mm))
+                
+                elements.append(Spacer(1, 5 * mm))
         else:
             # Default terms if none specified
-            default_terms = """
-            1. <b>Payment Terms:</b> Net 30 days from invoice date.<br/>
-            2. <b>Validity:</b> This quotation is valid for 30 days from the date of issue.<br/>
-            3. <b>Pricing:</b> All prices are in Indian Rupees (Rs.) and exclude applicable taxes unless specified.<br/>
-            4. <b>Scope Changes:</b> Any changes to the scope of work may result in additional charges.<br/>
-            5. <b>Delivery:</b> Delivery timeline will be confirmed upon order confirmation.
-            """
             elements.append(Paragraph("Terms & Conditions:", self.section_heading_style))
+            default_terms = """
+            1. <b>Pricing:</b> All prices are in Indian Rupees (Rs.) and exclude applicable taxes unless specified.<br/>
+            """
             elements.append(Paragraph(default_terms, self.terms_content_style))
 
         return elements
@@ -445,7 +450,7 @@ class QuotationPDFGenerator:
         # Thank you message and signature section
         footer_data = [
             [Paragraph("Thank you for your business!", self.normal_style), 
-             Paragraph("<br/>Digitally Signed <br/>Admin Authorized", self.right_style)]
+             Paragraph("Digitally Signed <br/>Admin Authorized", self.right_style)]
         ]
         
         footer_table = Table(footer_data, colWidths=[85 * mm, 85 * mm])
