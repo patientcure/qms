@@ -162,10 +162,8 @@ class QuotationPDFGenerator:
     def _build_company_header(self):
         elements = []
         
-        # Create header layout similar to HTML template
         header_data = []
         
-        # Left side - Quotation title and info
         left_content = []
         left_content.append(Paragraph("QUOTATION", self.title_style))
         
