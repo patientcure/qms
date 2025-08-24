@@ -633,7 +633,7 @@ class ProductSearchView(JWTAuthMixin, BaseAPIView):
             })
         return JsonResponse({'data': data})
 
-class CustomerSearchView(JWTAuthMixin, BaseAPIView):
+class CustomerSearchView(BaseAPIView):
     def get(self, request):
         name = request.GET.get('name', '').strip()
         if not name:
