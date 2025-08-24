@@ -1,27 +1,21 @@
 # apps/quotations/pdf_service.py
-import os
 import io
-from django.conf import settings
+import re
+from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, ListFlowable, ListItem
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
-from datetime import datetime
-import tempfile
-from urllib.parse import urljoin
-import re
-from weasyprint import HTML
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from .models import TermsAndConditions as Term
+
 
 class QuotationPDFGenerator:
     def __init__(self, quotation, company_profile=None, terms=None):
         self.quotation = quotation
         self.company = company_profile
-        self.terms = terms or []  # Accept terms as parameter
+        self.terms = terms or []
         self.styles = getSampleStyleSheet()
         self.buffer = io.BytesIO()
         self.doc = SimpleDocTemplate(
@@ -32,12 +26,9 @@ class QuotationPDFGenerator:
             topMargin=20 * mm,
             bottomMargin=20 * mm
         )
-        
-        # Define custom styles
         self._define_styles()
     
     def _define_styles(self):
-        # Title style
         self.title_style = ParagraphStyle(
             'Title',
             parent=self.styles['Heading1'],
@@ -46,7 +37,6 @@ class QuotationPDFGenerator:
             alignment=TA_CENTER
         )
         
-        # Heading style
         self.heading_style = ParagraphStyle(
             'Heading',
             parent=self.styles['Heading2'],
@@ -55,14 +45,12 @@ class QuotationPDFGenerator:
             spaceBefore=12
         )
         
-        # Normal style
         self.normal_style = ParagraphStyle(
             'Normal',
             parent=self.styles['Normal'],
             fontSize=10
         )
         
-        # Bold style
         self.bold_style = ParagraphStyle(
             'Bold',
             parent=self.styles['Normal'],
@@ -70,7 +58,6 @@ class QuotationPDFGenerator:
             fontName='Helvetica-Bold'
         )
         
-        # Right aligned style
         self.right_style = ParagraphStyle(
             'Right',
             parent=self.styles['Normal'],
@@ -78,7 +65,6 @@ class QuotationPDFGenerator:
             alignment=TA_RIGHT
         )
         
-        # Terms heading style
         self.terms_heading_style = ParagraphStyle(
             'TermsHeading',
             parent=self.styles['Heading3'],
@@ -88,7 +74,6 @@ class QuotationPDFGenerator:
             spaceBefore=6
         )
         
-        # Terms content style
         self.terms_content_style = ParagraphStyle(
             'TermsContent',
             parent=self.styles['Normal'],
@@ -98,14 +83,11 @@ class QuotationPDFGenerator:
         )
     
     def _build_company_header(self):
-        """Build company header section"""
         elements = []
         
         if self.company:
-            # Company name
             elements.append(Paragraph(self.company.name, self.title_style))
             
-            # Company details
             company_details = []
             if self.company.address:
                 company_details.append(self.company.address)
@@ -123,10 +105,7 @@ class QuotationPDFGenerator:
         return elements
     
     def _build_quotation_info(self):
-        """Build quotation information section"""
         elements = []
-        
-        # Quotation title and number
         elements.append(Paragraph("QUOTATION", self.heading_style))
         
         info_data = [
@@ -152,7 +131,6 @@ class QuotationPDFGenerator:
         return elements
     
     def _build_customer_info(self):
-        """Build customer information section"""
         elements = []
         elements.append(Paragraph("Customer Details", self.heading_style))
         
@@ -183,15 +161,10 @@ class QuotationPDFGenerator:
         return elements
     
     def _build_items_table(self):
-        """Build quotation items table"""
         elements = []
         elements.append(Paragraph("Items", self.heading_style))
         
-        # Table headers
         headers = ['Item', 'Description', 'Qty', 'Unit Price', 'Tax %', 'Total']
-        header_style = self.bold_style
-        
-        # Prepare table data
         table_data = [headers]
         
         for item in self.quotation.items.select_related('product').all():
@@ -205,14 +178,12 @@ class QuotationPDFGenerator:
             ]
             table_data.append(row)
         
-        # Create table
         item_table = Table(
             table_data, 
             colWidths=[35 * mm, 45 * mm, 20 * mm, 25 * mm, 20 * mm, 25 * mm],
             repeatRows=1
         )
         
-        # Style table
         item_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -235,7 +206,6 @@ class QuotationPDFGenerator:
         return elements
     
     def _build_totals(self):
-        """Build totals section"""
         elements = []
         
         totals_data = [
@@ -257,15 +227,9 @@ class QuotationPDFGenerator:
         return elements
     
     def _clean_html_content(self, html_content):
-        """Clean and convert HTML content for ReportLab"""
         if not html_content:
             return ""
         
-        # Remove HTML tags and convert to plain text with formatting
-        # This is a simple approach - you might want to use a proper HTML parser
-        import re
-        
-        # Replace common HTML tags with appropriate formatting
         content = html_content.replace('<br>', '\n')
         content = content.replace('<br/>', '\n')
         content = content.replace('<br />', '\n')
@@ -275,83 +239,56 @@ class QuotationPDFGenerator:
         content = content.replace('</li>', '\n')
         content = re.sub(r'<ul[^>]*>|</ul>', '', content)
         content = re.sub(r'<ol[^>]*>|</ol>', '', content)
-        
-        # Remove any remaining HTML tags
         content = re.sub(r'<[^>]+>', '', content)
-        
-        # Clean up whitespace
         content = re.sub(r'\n\s*\n', '\n\n', content)
-        content = content.strip()
         
-        return content
+        return content.strip()
     
     def _build_terms(self):
-        """Build terms and conditions section"""
         elements = []
-        
-        # Check if we have terms to display
         terms_to_display = []
-        
-        # First, try to get terms from the parameter passed to the constructor
+
         if self.terms:
-            try:
-                terms_to_display = list(Term.objects.filter(id__in=self.terms))
-            except Exception as e:
-                print(f"Error fetching terms by IDs: {e}")
-        
-        # Fallback: try to get terms from quotation.terms field (if it exists)
+            terms_to_display = list(Term.objects.filter(id__in=self.terms))
+
         if not terms_to_display and hasattr(self.quotation, 'terms') and self.quotation.terms:
             try:
-                # Handle different formats of terms field
                 if isinstance(self.quotation.terms, str):
-                    # Parse comma-separated string
                     term_ids = [int(t.strip()) for t in self.quotation.terms.split(",") if t.strip().isdigit()]
                     terms_to_display = list(Term.objects.filter(id__in=term_ids))
                 else:
-                    # Assume it's a ManyToMany relationship
                     terms_to_display = list(self.quotation.terms.all())
-            except Exception as e:
-                print(f"Error fetching terms from quotation: {e}")
-        
-        # If we have terms to display, add them to the PDF
+            except Exception:
+                pass
+
         if terms_to_display:
             elements.append(Paragraph("Terms & Conditions", self.heading_style))
-            
+
             for term in terms_to_display:
-                # Add term title
                 elements.append(Paragraph(term.title, self.terms_heading_style))
-                
-                # Process term content
+
                 content = ""
-                if hasattr(term, 'content_html') and term.content_html:
+                if getattr(term, 'content_html', None):
                     content = self._clean_html_content(term.content_html)
-                elif hasattr(term, 'content') and term.content:
+                elif getattr(term, 'content', None):
                     content = str(term.content)
-                
+
                 if content:
-                    # Split content into paragraphs and add each as a separate element
-                    paragraphs = content.split('\n\n')
-                    for para in paragraphs:
-                        para = para.strip()
-                        if para:
-                            # Handle bullet points
-                            if para.startswith('•'):
-                                elements.append(Paragraph(para, self.terms_content_style))
-                            else:
-                                # Split on single newlines for line breaks within a paragraph
-                                lines = para.split('\n')
-                                for line in lines:
-                                    line = line.strip()
-                                    if line:
-                                        elements.append(Paragraph(line, self.terms_content_style))
-                
-                # Add some space after each term
+                    bullet_points = re.findall(r'\*(.*?)\*', content)
+                    normal_text = re.sub(r'\*(.*?)\*', '', content).strip()
+
+                    if normal_text:
+                        elements.append(Paragraph(normal_text, self.terms_content_style))
+
+                    if bullet_points:
+                        bullet_items = [ListItem(Paragraph(bp.strip(), self.terms_content_style)) for bp in bullet_points]
+                        elements.append(ListFlowable(bullet_items, bulletType='bullet', leftIndent=10 * mm))
+
                 elements.append(Spacer(1, 5 * mm))
-        
+
         return elements
     
     def _build_footer(self):
-        """Build footer section"""
         elements = []
         elements.append(Spacer(1, 20 * mm))
         
@@ -370,10 +307,8 @@ class QuotationPDFGenerator:
         return elements
     
     def generate(self):
-        """Generate the complete PDF"""
         elements = []
         
-        # Build all sections
         elements.extend(self._build_company_header())
         elements.extend(self._build_quotation_info())
         elements.extend(self._build_customer_info())
@@ -382,10 +317,7 @@ class QuotationPDFGenerator:
         elements.extend(self._build_terms())
         elements.extend(self._build_footer())
         
-        # Build PDF document
         self.doc.build(elements)
-        
-        # Get PDF content
         pdf = self.buffer.getvalue()
         self.buffer.close()
         

@@ -5,6 +5,9 @@ from .terms_views import (
     TermsListView,
     TermsCreateView,
 )
+from .quotation_create_view import(
+    QuotationCreateView
+)
 from .views import (
     # Salesperson Management
     SalespersonListView,
@@ -19,7 +22,6 @@ from .views import (
     
     # Quotation Management
     QuotationListView,
-    QuotationCreateView,
     QuotationDetailView,
     QuotationSendView,
     QuotationAssignView,
