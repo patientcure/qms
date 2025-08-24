@@ -392,9 +392,9 @@ class QuotationCreateView(BaseAPIView):
             # Combine POST and JSON data
             form_data = {**request.POST.dict(), **request_json}
             
-            # Extract quotation data (excluding items and special flags)
+            # Extract quotation data (excluding items, terms, and special flags)
             quotation_data = {k: v for k, v in form_data.items() 
-                            if k not in ['items', 'send_immediately', 'auto_assign']}
+                            if k not in ['items', 'terms', 'send_immediately', 'auto_assign']}
             
             # Validate required fields
             required_fields = ['customer', 'status']
@@ -427,6 +427,15 @@ class QuotationCreateView(BaseAPIView):
                         'error': f'Item {i} missing quantity field'
                     }, status=400)
             
+            # Extract and validate terms data
+            terms_data = request_json.get('terms', [])
+            valid_term_ids = self._validate_terms(terms_data)
+            if terms_data and not valid_term_ids:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid terms provided'
+                }, status=400)
+            
             # Prepare formset data
             formset_data = self._prepare_formset_data(items_data)
             all_data = {**quotation_data, **formset_data}
@@ -458,6 +467,15 @@ class QuotationCreateView(BaseAPIView):
             formset.instance = quotation
             formset.save()
             
+            # Handle Terms & Conditions - Store the IDs for later use
+            if valid_term_ids:
+                # Option 1: If you still want to store in database
+                # self._attach_terms_to_quotation(quotation, valid_term_ids)
+                
+                # Option 2: Just keep the IDs for PDF generation
+                # The PDF service will handle fetching the actual terms
+                pass
+            
             # Recalculate totals
             try:
                 quotation.recalculate_totals()
@@ -479,7 +497,7 @@ class QuotationCreateView(BaseAPIView):
             # Generate PDF
             pdf_url = None
             try:
-                pdf_path, pdf_url = save_quotation_pdf(quotation, request)
+                pdf_path, pdf_url = save_quotation_pdf(quotation, request, terms=valid_term_ids)
             except Exception as e:
                 logger.error(f"PDF generation failed: {str(e)}")
             
@@ -492,7 +510,7 @@ class QuotationCreateView(BaseAPIView):
                     logger.error(f"Failed to send quotation: {str(e)}")
             
             # Prepare response data
-            quotation_data = self._get_quotation_response_data(quotation)
+            quotation_data = self._get_quotation_response_data(quotation, valid_term_ids)
             quotation_data['pdf_url'] = pdf_url
             
             return JsonResponse({
@@ -514,6 +532,50 @@ class QuotationCreateView(BaseAPIView):
                 error_response['debug_info'] = traceback.format_exc()
             
             return JsonResponse(error_response, status=500)
+    
+    def _validate_terms(self, terms_data):
+        """Validate and return valid term IDs"""
+        if not terms_data:
+            return []
+        
+        try:
+            # Handle different input formats
+            if isinstance(terms_data, str):
+                # Handle comma-separated string like "1,2,3"
+                term_ids = [int(x.strip()) for x in terms_data.split(',') if x.strip()]
+            elif isinstance(terms_data, list):
+                # Handle list of IDs
+                term_ids = [int(x) for x in terms_data if str(x).strip()]
+            else:
+                logger.warning(f"Invalid terms data format: {type(terms_data)}")
+                return []
+            
+            # Validate that all term IDs exist
+            valid_ids = list(TermsAndConditions.objects.filter(
+                id__in=term_ids
+            ).values_list('id', flat=True))
+            
+            # Log any missing terms
+            missing_ids = set(term_ids) - set(valid_ids)
+            if missing_ids:
+                logger.warning(f"Terms with IDs {missing_ids} not found")
+            
+            return valid_ids
+            
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error validating terms: {str(e)}")
+            return []
+    
+    def _attach_terms_to_quotation(self, quotation, term_ids):
+        """Attach terms to quotation"""
+        try:
+            # Using ManyToManyField - simple and clean
+            quotation.terms.set(term_ids)
+            logger.info(f"Attached {len(term_ids)} terms to quotation {quotation.id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to attach terms to quotation: {str(e)}")
+            raise
     
     def _prepare_formset_data(self, items_data):
         """Convert items list to formset format"""
@@ -574,7 +636,7 @@ class QuotationCreateView(BaseAPIView):
         
         return JsonResponse({'success': False, 'errors': errors}, status=400)
     
-    def _get_quotation_response_data(self, quotation):
+    def _get_quotation_response_data(self, quotation, term_ids=None):
         """Get detailed quotation data for API response"""
         try:
             items = []
@@ -595,7 +657,7 @@ class QuotationCreateView(BaseAPIView):
                 }
                 items.append(item_data)
             
-            return {
+            response_data = {
                 'id': quotation.id,
                 'quotation_number': quotation.quotation_number,
                 'status': quotation.status,
@@ -617,15 +679,24 @@ class QuotationCreateView(BaseAPIView):
                 'items': items
             }
             
+            # Include terms if provided
+            if term_ids:
+                response_data['terms'] = term_ids
+            
+            return response_data
+            
         except Exception as e:
             logger.error(f"Error preparing quotation response data: {str(e)}")
             # Return basic data as fallback
-            return {
+            basic_data = {
                 'id': quotation.id,
                 'quotation_number': quotation.quotation_number,
                 'status': quotation.status,
                 'total': float(quotation.total)
             }
+            if term_ids:
+                basic_data['terms'] = term_ids
+            return basic_data
         
 class QuotationPDFView(BaseAPIView):
     def get(self, request, quotation_id):

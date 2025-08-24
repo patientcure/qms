@@ -15,11 +15,13 @@ import tempfile
 from urllib.parse import urljoin
 import re
 from weasyprint import HTML
+from .models import TermsAndConditions as Term
 
 class QuotationPDFGenerator:
-    def __init__(self, quotation, company_profile=None):
+    def __init__(self, quotation, company_profile=None, terms=None):
         self.quotation = quotation
         self.company = company_profile
+        self.terms = terms or []  # Accept terms as parameter
         self.styles = getSampleStyleSheet()
         self.buffer = io.BytesIO()
         self.doc = SimpleDocTemplate(
@@ -74,6 +76,25 @@ class QuotationPDFGenerator:
             parent=self.styles['Normal'],
             fontSize=10,
             alignment=TA_RIGHT
+        )
+        
+        # Terms heading style
+        self.terms_heading_style = ParagraphStyle(
+            'TermsHeading',
+            parent=self.styles['Heading3'],
+            fontSize=11,
+            fontName='Helvetica-Bold',
+            spaceAfter=6,
+            spaceBefore=6
+        )
+        
+        # Terms content style
+        self.terms_content_style = ParagraphStyle(
+            'TermsContent',
+            parent=self.styles['Normal'],
+            fontSize=9,
+            leftIndent=10,
+            spaceAfter=6
         )
     
     def _build_company_header(self):
@@ -235,22 +256,99 @@ class QuotationPDFGenerator:
         elements.append(Spacer(1, 15 * mm))
         return elements
     
-    def _build_terms(self):
-        if not self.quotation.terms:
+    def _clean_html_content(self, html_content):
+        """Clean and convert HTML content for ReportLab"""
+        if not html_content:
             return ""
-
-        title = f"<h2>{self.quotation.terms.title}</h2>"
-
-        terms_text = self.quotation.terms.content_html
-        bullet_lines = re.findall(r"\*(.*?)\*", terms_text)
-
-        if bullet_lines:
-            bullets = "".join([f"<li>{line.strip()}</li>" for line in bullet_lines])
-            content = f"<ul>{bullets}</ul>"
-        else:
-            content = f"<p>{terms_text.strip()}</p>"
-
-        return f"{title}{content}"
+        
+        # Remove HTML tags and convert to plain text with formatting
+        # This is a simple approach - you might want to use a proper HTML parser
+        import re
+        
+        # Replace common HTML tags with appropriate formatting
+        content = html_content.replace('<br>', '\n')
+        content = content.replace('<br/>', '\n')
+        content = content.replace('<br />', '\n')
+        content = re.sub(r'<p[^>]*>', '\n', content)
+        content = content.replace('</p>', '\n')
+        content = re.sub(r'<li[^>]*>', '• ', content)
+        content = content.replace('</li>', '\n')
+        content = re.sub(r'<ul[^>]*>|</ul>', '', content)
+        content = re.sub(r'<ol[^>]*>|</ol>', '', content)
+        
+        # Remove any remaining HTML tags
+        content = re.sub(r'<[^>]+>', '', content)
+        
+        # Clean up whitespace
+        content = re.sub(r'\n\s*\n', '\n\n', content)
+        content = content.strip()
+        
+        return content
+    
+    def _build_terms(self):
+        """Build terms and conditions section"""
+        elements = []
+        
+        # Check if we have terms to display
+        terms_to_display = []
+        
+        # First, try to get terms from the parameter passed to the constructor
+        if self.terms:
+            try:
+                terms_to_display = list(Term.objects.filter(id__in=self.terms))
+            except Exception as e:
+                print(f"Error fetching terms by IDs: {e}")
+        
+        # Fallback: try to get terms from quotation.terms field (if it exists)
+        if not terms_to_display and hasattr(self.quotation, 'terms') and self.quotation.terms:
+            try:
+                # Handle different formats of terms field
+                if isinstance(self.quotation.terms, str):
+                    # Parse comma-separated string
+                    term_ids = [int(t.strip()) for t in self.quotation.terms.split(",") if t.strip().isdigit()]
+                    terms_to_display = list(Term.objects.filter(id__in=term_ids))
+                else:
+                    # Assume it's a ManyToMany relationship
+                    terms_to_display = list(self.quotation.terms.all())
+            except Exception as e:
+                print(f"Error fetching terms from quotation: {e}")
+        
+        # If we have terms to display, add them to the PDF
+        if terms_to_display:
+            elements.append(Paragraph("Terms & Conditions", self.heading_style))
+            
+            for term in terms_to_display:
+                # Add term title
+                elements.append(Paragraph(term.title, self.terms_heading_style))
+                
+                # Process term content
+                content = ""
+                if hasattr(term, 'content_html') and term.content_html:
+                    content = self._clean_html_content(term.content_html)
+                elif hasattr(term, 'content') and term.content:
+                    content = str(term.content)
+                
+                if content:
+                    # Split content into paragraphs and add each as a separate element
+                    paragraphs = content.split('\n\n')
+                    for para in paragraphs:
+                        para = para.strip()
+                        if para:
+                            # Handle bullet points
+                            if para.startswith('•'):
+                                elements.append(Paragraph(para, self.terms_content_style))
+                            else:
+                                # Split on single newlines for line breaks within a paragraph
+                                lines = para.split('\n')
+                                for line in lines:
+                                    line = line.strip()
+                                    if line:
+                                        elements.append(Paragraph(line, self.terms_content_style))
+                
+                # Add some space after each term
+                elements.append(Spacer(1, 5 * mm))
+        
+        return elements
     
     def _build_footer(self):
         """Build footer section"""
@@ -292,5 +390,3 @@ class QuotationPDFGenerator:
         self.buffer.close()
         
         return pdf
-
-

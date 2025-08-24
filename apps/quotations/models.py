@@ -129,7 +129,7 @@ class Quotation(TimestampedModel):
     quotation_number = models.CharField(max_length=30, unique=True, editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='quotations')
     assigned_to = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
-    terms = models.ForeignKey(TermsAndConditions, on_delete=models.SET_NULL, null=True, blank=True)
+    terms = models.ManyToManyField(TermsAndConditions, blank=True)
     email_template = models.ForeignKey(EmailTemplate, on_delete=models.SET_NULL, null=True, blank=True)
 
     status = models.CharField(max_length=20, choices=QuotationStatus.choices, default=QuotationStatus.PENDING)
