@@ -8,6 +8,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, ListFlowable, ListItem
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.pdfgen import canvas
 from .models import TermsAndConditions as Term
 
 
@@ -207,13 +208,18 @@ class QuotationPDFGenerator:
     
     def _build_totals(self):
         elements = []
-        
+
+        # compute totals dynamically
+        subtotal = sum(item.quantity * item.unit_price for item in self.quotation.items.all())
+        tax_total = sum(item.quantity * item.unit_price * (item.tax_rate / 100) for item in self.quotation.items.all())
+        grand_total = subtotal + tax_total
+
         totals_data = [
-            [Paragraph("Subtotal:", self.bold_style), Paragraph(f"Rs  {self.quotation.subtotal:.2f}", self.normal_style)],
-            [Paragraph("Tax Total:", self.bold_style), Paragraph(f"Rs  {self.quotation.tax_total:.2f}", self.normal_style)],
-            [Paragraph("Grand Total:", self.bold_style), Paragraph(f"Rs  {self.quotation.total:.2f}", self.bold_style)],
+            [Paragraph("Subtotal:", self.bold_style), Paragraph(f"Rs  {subtotal:.2f}", self.normal_style)],
+            [Paragraph("Tax Total:", self.bold_style), Paragraph(f"Rs  {tax_total:.2f}", self.normal_style)],
+            [Paragraph("Grand Total:", self.bold_style), Paragraph(f"Rs  {grand_total:.2f}", self.bold_style)],
         ]
-        
+
         totals_table = Table(totals_data, colWidths=[40 * mm, 40 * mm])
         totals_table.setStyle(TableStyle([
             ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
@@ -221,7 +227,7 @@ class QuotationPDFGenerator:
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 0),
         ]))
-        
+
         elements.append(totals_table)
         elements.append(Spacer(1, 15 * mm))
         return elements
@@ -229,10 +235,7 @@ class QuotationPDFGenerator:
     def _clean_html_content(self, html_content):
         if not html_content:
             return ""
-        
-        content = html_content.replace('<br>', '\n')
-        content = content.replace('<br/>', '\n')
-        content = content.replace('<br />', '\n')
+        content = html_content.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
         content = re.sub(r'<p[^>]*>', '\n', content)
         content = content.replace('</p>', '\n')
         content = re.sub(r'<li[^>]*>', '• ', content)
@@ -241,7 +244,6 @@ class QuotationPDFGenerator:
         content = re.sub(r'<ol[^>]*>|</ol>', '', content)
         content = re.sub(r'<[^>]+>', '', content)
         content = re.sub(r'\n\s*\n', '\n\n', content)
-        
         return content.strip()
     
     def _build_terms(self):
@@ -263,27 +265,17 @@ class QuotationPDFGenerator:
 
         if terms_to_display:
             elements.append(Paragraph("Terms & Conditions", self.heading_style))
-
             for term in terms_to_display:
                 elements.append(Paragraph(term.title, self.terms_heading_style))
-
-                content = ""
-                if getattr(term, 'content_html', None):
-                    content = self._clean_html_content(term.content_html)
-                elif getattr(term, 'content', None):
-                    content = str(term.content)
-
+                content = getattr(term, 'content_html', '') or str(getattr(term, 'content', ''))
                 if content:
                     bullet_points = re.findall(r'\*(.*?)\*', content)
                     normal_text = re.sub(r'\*(.*?)\*', '', content).strip()
-
                     if normal_text:
                         elements.append(Paragraph(normal_text, self.terms_content_style))
-
                     if bullet_points:
                         bullet_items = [ListItem(Paragraph(bp.strip(), self.terms_content_style)) for bp in bullet_points]
                         elements.append(ListFlowable(bullet_items, bulletType='bullet', leftIndent=10 * mm))
-
                 elements.append(Spacer(1, 5 * mm))
 
         return elements
@@ -291,11 +283,9 @@ class QuotationPDFGenerator:
     def _build_footer(self):
         elements = []
         elements.append(Spacer(1, 20 * mm))
-        
         footer_text = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         if self.company:
             footer_text += f" | {self.company.name}"
-            
         elements.append(Paragraph(footer_text, ParagraphStyle(
             'Footer',
             parent=self.styles['Normal'],
@@ -303,12 +293,16 @@ class QuotationPDFGenerator:
             alignment=TA_CENTER,
             textColor=colors.grey
         )))
-        
         return elements
+    
+    def _add_page_number(self, canvas_obj: canvas.Canvas, doc):
+        page_num = canvas_obj.getPageNumber()
+        canvas_obj.setFont("Helvetica", 8)
+        canvas_obj.setFillColor(colors.grey)
+        canvas_obj.drawRightString(200 * mm, 10 * mm, f"Page {page_num}")
     
     def generate(self):
         elements = []
-        
         elements.extend(self._build_company_header())
         elements.extend(self._build_quotation_info())
         elements.extend(self._build_customer_info())
@@ -317,8 +311,7 @@ class QuotationPDFGenerator:
         elements.extend(self._build_terms())
         elements.extend(self._build_footer())
         
-        self.doc.build(elements)
+        self.doc.build(elements, onFirstPage=self._add_page_number, onLaterPages=self._add_page_number)
         pdf = self.buffer.getvalue()
         self.buffer.close()
-        
         return pdf
