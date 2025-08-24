@@ -12,6 +12,8 @@ from .views import BaseAPIView
 from .forms import CustomerForm
 from .models import Customer
 logger = logging.getLogger(__name__)
+from apps.accounts.models import User, Roles
+from django.db.models import Count
 
 class QuotationCreateView(BaseAPIView):
     @transaction.atomic
@@ -103,7 +105,14 @@ class QuotationCreateView(BaseAPIView):
                 quotation = form.save(commit=False)
 
                 if not quotation.assigned_to and auto_assign:
-                    quotation.auto_assign_if_needed()
+                    salesperson = (
+                        User.objects.filter(role=Roles.SALESPERSON, is_active=True)
+                        .annotate(num_quotations=Count('quotations'))
+                        .order_by('num_quotations', 'id')
+                        .first()
+                    )
+                    if salesperson:
+                        quotation.assigned_to = salesperson
 
                 quotation.save()
 
