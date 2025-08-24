@@ -13,6 +13,8 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from datetime import datetime
 import tempfile
 from urllib.parse import urljoin
+import re
+from weasyprint import HTML
 
 class QuotationPDFGenerator:
     def __init__(self, quotation, company_profile=None):
@@ -176,9 +178,9 @@ class QuotationPDFGenerator:
                 Paragraph(item.product.name if item.product else "N/A", self.normal_style),
                 Paragraph(item.description or "", self.normal_style),
                 Paragraph(str(item.quantity), self.normal_style),
-                Paragraph(f"₹{item.unit_price:.2f}", self.normal_style),
+                Paragraph(f"Rs  {item.unit_price:.2f}", self.normal_style),
                 Paragraph(f"{item.tax_rate}%", self.normal_style),
-                Paragraph(f"₹{(item.quantity * item.unit_price * (1 + item.tax_rate / 100)):.2f}", self.normal_style),
+                Paragraph(f"Rs  {(item.quantity * item.unit_price * (1 + item.tax_rate / 100)):.2f}", self.normal_style),
             ]
             table_data.append(row)
         
@@ -216,9 +218,9 @@ class QuotationPDFGenerator:
         elements = []
         
         totals_data = [
-            [Paragraph("Subtotal:", self.bold_style), Paragraph(f"₹{self.quotation.subtotal:.2f}", self.normal_style)],
-            [Paragraph("Tax Total:", self.bold_style), Paragraph(f"₹{self.quotation.tax_total:.2f}", self.normal_style)],
-            [Paragraph("Grand Total:", self.bold_style), Paragraph(f"₹{self.quotation.total:.2f}", self.bold_style)],
+            [Paragraph("Subtotal:", self.bold_style), Paragraph(f"Rs  {self.quotation.subtotal:.2f}", self.normal_style)],
+            [Paragraph("Tax Total:", self.bold_style), Paragraph(f"Rs  {self.quotation.tax_total:.2f}", self.normal_style)],
+            [Paragraph("Grand Total:", self.bold_style), Paragraph(f"Rs  {self.quotation.total:.2f}", self.bold_style)],
         ]
         
         totals_table = Table(totals_data, colWidths=[40 * mm, 40 * mm])
@@ -234,18 +236,21 @@ class QuotationPDFGenerator:
         return elements
     
     def _build_terms(self):
-        """Build terms and conditions section"""
-        elements = []
-        
-        if self.quotation.terms:
-            elements.append(Paragraph("Terms & Conditions", self.heading_style))
-            # Simple text extraction from HTML (you might want to improve this)
-            terms_text = self.quotation.terms.content_html.replace('<br>', '\n').replace('</p>', '\n')
-            import re
-            terms_text = re.sub('<[^<]+?>', '', terms_text)  # Remove HTML tags
-            elements.append(Paragraph(terms_text, self.normal_style))
-        
-        return elements
+        if not self.quotation.terms:
+            return ""
+
+        title = f"<h2>{self.quotation.terms.title}</h2>"
+
+        terms_text = self.quotation.terms.content_html
+        bullet_lines = re.findall(r"\*(.*?)\*", terms_text)
+
+        if bullet_lines:
+            bullets = "".join([f"<li>{line.strip()}</li>" for line in bullet_lines])
+            content = f"<ul>{bullets}</ul>"
+        else:
+            content = f"<p>{terms_text.strip()}</p>"
+
+        return f"{title}{content}"
     
     def _build_footer(self):
         """Build footer section"""
@@ -289,37 +294,3 @@ class QuotationPDFGenerator:
         return pdf
 
 
-def save_quotation_pdf(quotation, request=None):
-    """
-    Generate and save quotation PDF, return file path and URL
-    """
-    from .models import CompanyProfile
-    
-    # Get company profile
-    company = CompanyProfile.objects.first()
-    
-    # Generate PDF
-    generator = QuotationPDFGenerator(quotation, company)
-    pdf_content = generator.generate()
-    
-    # Create directory if it doesn't exist
-    pdf_dir = os.path.join(settings.MEDIA_ROOT, 'quotations')
-    os.makedirs(pdf_dir, exist_ok=True)
-    
-    # Generate filename
-    filename = f"quotation_{quotation.quotation_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    filepath = os.path.join(pdf_dir, filename)
-    
-    # Save PDF file
-    with open(filepath, 'wb') as f:
-        f.write(pdf_content)
-    
-    # Generate URL
-    if request:
-        relative_path = filepath.replace(settings.MEDIA_ROOT, settings.MEDIA_URL)
-        pdf_url = request.build_absolute_uri(relative_path)
-    else:
-        # For cases where request is not available
-        pdf_url = filepath.replace(settings.MEDIA_ROOT, settings.MEDIA_URL)
-    
-    return filepath, pdf_url

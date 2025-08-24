@@ -1,4 +1,10 @@
+# urls.py - Complete URL configuration
+
 from django.urls import path
+from .terms_views import (
+    TermsListView,
+    TermsCreateView,
+)
 from .views import (
     # Salesperson Management
     SalespersonListView,
@@ -55,7 +61,6 @@ urlpatterns = [
     path('api/quotations/<int:quotation_id>/send/', QuotationSendView.as_view(), name='quotation_send'),
     path('api/quotations/<int:quotation_id>/assign/', QuotationAssignView.as_view(), name='quotation_assign'),
     path('api/quotations/<int:quotation_id>/pdf/', QuotationPDFView.as_view(), name='quotation_pdf'),
-
     
     # ========== Customer Management API ==========
     path('api/customers/', CustomerListView.as_view(), name='customer_list'),
@@ -70,15 +75,9 @@ urlpatterns = [
     # ========== Dashboard Stats API ==========
     path('api/dashboard/admin/stats/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
     path('api/dashboard/salesperson/stats/', SalespersonDashboardStatsView.as_view(), name='salesperson_dashboard_stats'),
-]
 
-# Optional: Legacy URL redirects or deprecated endpoints
-# You can keep these temporarily during migration
-legacy_urlpatterns = [
-    # Legacy endpoints that could redirect to new API
-    # path("create/", views.LegacyQuotationCreateView.as_view(), name="legacy_create"),
-    # path("list/", views.LegacyQuotationListView.as_view(), name="legacy_list"),
-]
+    #============Terms API ==================
 
-# Uncomment to include legacy URLs during migration
-# urlpatterns += legacy_urlpatterns
+    path('api/terms/', TermsListView.as_view(), name='terms-list'),
+    path('api/terms/create/', TermsCreateView.as_view(), name='terms-create'),
+]

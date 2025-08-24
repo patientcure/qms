@@ -34,11 +34,20 @@ QuotationItemFormSet = forms.inlineformset_factory(
 class QuotationForm(forms.ModelForm):
     class Meta:
         model = Quotation
-        fields = ["customer", "assigned_to", "terms", "email_template", "follow_up_date", "currency"]
-        widgets = {
-            "follow_up_date": forms.DateInput(attrs={"type": "date"})
-        }
-
+        fields = [
+            'customer', 'assigned_to', 'terms', 'email_template', 
+            'follow_up_date','status'
+        ]
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make most fields optional with sensible defaults
+        self.fields['assigned_to'].required = False
+        self.fields['terms'].required = False
+        self.fields['email_template'].required = False
+        self.fields['follow_up_date'].required = False
+        self.fields['status'].required = False  # Will default to PENDING
+        
 class SalespersonForm(UserCreationForm):
     first_name = forms.CharField(required=True)
     last_name = forms.CharField(required=True)
@@ -132,3 +141,5 @@ class LeadForm(forms.ModelForm):
         if commit:
             lead.save()
         return lead
+    
+

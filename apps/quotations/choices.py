@@ -10,12 +10,12 @@ class LeadStatus(models.TextChoices):
     ON_HOLD = 'ON_HOLD', _('On Hold')
 
 class QuotationStatus(models.TextChoices):
-    PENDING = 'PENDING', 'Pending'  
-    MAIL_SENT = 'MAIL_SENT', 'Mail Sent'  
-    IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
-    COMPLETED = 'COMPLETED', 'Completed'
-    CANCELLED = 'CANCELLED', 'Cancelled'
-
+    DRAFT = 'DRAFT', 'Draft'
+    PENDING = 'PENDING', 'Pending'
+    SENT = 'SENT', 'Sent'
+    ACCEPTED = 'ACCEPTED', 'Accepted'
+    REJECTED = 'REJECTED', 'Rejected'
+    EXPIRED = 'EXPIRED', 'Expired'
 class ActivityAction(models.TextChoices):
     # User actions
     LOGIN = 'LOGIN', _('User Login')

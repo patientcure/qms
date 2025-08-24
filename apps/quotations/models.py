@@ -83,7 +83,6 @@ class Product(models.Model):
 
 class TermsAndConditions(TimestampedModel):
     title = models.CharField(max_length=255)
-    # store as HTML (rendered in PDF); keep flexible/editable via Django admin
     content_html = models.TextField()
     is_default = models.BooleanField(default=False)
 
@@ -93,7 +92,6 @@ class TermsAndConditions(TimestampedModel):
 class EmailTemplate(TimestampedModel):
     title = models.CharField(max_length=255)
     subject = models.CharField(max_length=255)
-    # support placeholders like {{customer_name}}, {{quotation_number}}, {{total}}
     body_html = models.TextField()
     is_default = models.BooleanField(default=False)
 
