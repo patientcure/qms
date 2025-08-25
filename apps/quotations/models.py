@@ -139,12 +139,11 @@ class Quotation(TimestampedModel):
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     tax_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'),blank=True,null=True)
     emailed_at = models.DateTimeField(null=True, blank=True)
 
     # Google Drive
-    drive_file_id = models.CharField(max_length=200, blank=True)
-    drive_web_view_link = models.URLField(blank=True)
+    file_url = models.URLField(blank=True)
 
     class Meta:
         indexes = [
@@ -164,7 +163,6 @@ class Quotation(TimestampedModel):
         if creating and not self.quotation_number:
             self.quotation_number = generate_next_quotation_number()
         super().save(*args, **kwargs)
-        # Recompute totals after items exist
         self.recalculate_totals()
 
     def recalculate_totals(self):
@@ -174,7 +172,10 @@ class Quotation(TimestampedModel):
         )
         self.subtotal = agg['subtotal'] or Decimal('0.00')
         self.tax_total = agg['tax'] or Decimal('0.00')
-        self.total = (self.subtotal + self.tax_total).quantize(Decimal('0.01'))
+        discount_amount = Decimal('0.00')
+        if self.discount:
+            discount_amount = (self.subtotal * self.discount / Decimal('100.00')).quantize(Decimal('0.01'))
+        self.total = ((self.subtotal - discount_amount) + self.tax_total).quantize(Decimal('0.01'))
         super().save(update_fields=['subtotal', 'tax_total', 'total'])
 
     def auto_assign_if_needed(self):

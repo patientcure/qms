@@ -271,7 +271,7 @@ class QuotationPDFGenerator:
             tax_rate = float(item.tax_rate) if item.tax_rate else 0
             
             # Calculate amount including tax
-            amount = quantity * unit_price * (1 + tax_rate / 100)
+            amount = quantity * unit_price
             
             row = [
                 Paragraph(str(idx), self.normal_style),
@@ -328,11 +328,19 @@ class QuotationPDFGenerator:
         # Compute totals dynamically
         subtotal = sum(item.quantity * item.unit_price for item in self.quotation.items.all())
         tax_total = sum(item.quantity * item.unit_price * (item.tax_rate / 100 if item.tax_rate else 0) for item in self.quotation.items.all())
-        grand_total = subtotal + tax_total
+
+        # Discount calculation
+        discount_percent = getattr(self.quotation, 'discount', 0) or 0
+        discount_amount = subtotal * (discount_percent / 100)
+        subtotal_after_discount = subtotal - discount_amount
+
+        grand_total = subtotal_after_discount + tax_total
 
         # Create summary box similar to HTML template
         totals_data = [
             [Paragraph("Subtotal:", self.normal_style), Paragraph(f"Rs. {subtotal:.2f}", self.normal_style)],
+            [Paragraph("Discount ({:.2f}%):".format(discount_percent), self.normal_style), Paragraph(f"- Rs. {discount_amount:.2f}", self.normal_style)],
+            [Paragraph("Subtotal after Discount:", self.normal_style), Paragraph(f"Rs. {subtotal_after_discount:.2f}", self.normal_style)],
             [Paragraph("Tax Total:", self.normal_style), Paragraph(f"Rs. {tax_total:.2f}", self.normal_style)],
             [Paragraph("Total Amount:", ParagraphStyle(
                 'TotalAmount',

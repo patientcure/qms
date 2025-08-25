@@ -315,12 +315,12 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
 
 
 # ========== Quotation Management ==========
-class QuotationListView(JWTAuthMixin, BaseAPIView):  # FIXED: Changed from LoginRequiredMixin
+class QuotationListView(JWTAuthMixin,BaseAPIView):
     def get(self, request):
         if request.user.role == Roles.ADMIN:
-            quotations = Quotation.objects.select_related('customer', 'assigned_to', 'terms')
+            quotations = Quotation.objects.select_related('customer', 'assigned_to')
         else:
-            quotations = Quotation.objects.filter(assigned_to=request.user).select_related('customer', 'assigned_to', 'terms')
+            quotations = Quotation.objects.filter(assigned_to=request.user).select_related('customer', 'assigned_to')
         
         data = []
         for quotation in quotations:
@@ -328,12 +328,14 @@ class QuotationListView(JWTAuthMixin, BaseAPIView):  # FIXED: Changed from Login
                 'id': quotation.id,
                 'quotation_number': quotation.quotation_number,
                 'status': quotation.status,
+                'url': quotation.file_url,
                 'subtotal': float(quotation.subtotal),
                 'tax_total': float(quotation.tax_total),
                 'total': float(quotation.total),
                 'customer': {
                     'id': quotation.customer.id,
-                    'name': quotation.customer.name
+                    'name': quotation.customer.name,
+                    'email': quotation.customer.email
                 },
                 'assigned_to': {
                     'id': quotation.assigned_to.id if quotation.assigned_to else None,

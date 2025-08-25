@@ -135,6 +135,8 @@ class QuotationCreateView(BaseAPIView):
                 pdf_url = None
                 try:
                     pdf_path, pdf_url = save_quotation_pdf(quotation, request, terms=valid_term_ids)
+                    quotation.file_url = pdf_url
+                    quotation.save(update_fields=['file_url'])
                 except Exception as e:
                     logger.error(f"PDF generation failed: {str(e)}")
 

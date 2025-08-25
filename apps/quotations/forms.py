@@ -35,7 +35,7 @@ class QuotationForm(forms.ModelForm):
     class Meta:
         model = Quotation
         fields = [
-            'customer', 'assigned_to', 'terms', 'email_template', 
+            'customer', 'assigned_to', 'terms', 'email_template', 'discount',
             'follow_up_date','status'
         ]
     
