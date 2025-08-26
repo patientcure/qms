@@ -17,11 +17,10 @@ from .models import (
 )
 from .forms import (
     SalespersonForm, LeadForm,
-    QuotationForm, QuotationItemFormSet,
+    QuotationForm,
     CustomerForm, ProductForm
 )
 from .choices import ActivityAction
-from .utils import send_and_archive_quotation
 
 from django.http import JsonResponse
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -188,26 +187,24 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
             'data': {'is_active': salesperson.is_active}
         })
 
-
-# ========== Lead Management ==========
-class LeadListView(AdminRequiredMixin, BaseAPIView):
+class LeadListView(BaseAPIView):
     def get(self, request):
         leads = Lead.objects.select_related('customer', 'assigned_to')
         data = []
         for lead in leads:
             data.append({
                 'id': lead.id,
-                'title': lead.title,
                 'status': lead.status,
-                'priority': lead.priority,
-                'description': lead.description,
+                'source':lead.source,
+                'follow_up_date': lead.follow_up_date,
+                'notes': lead.notes,
                 'customer': {
                     'id': lead.customer.id if lead.customer else None,
-                    'name': lead.customer.name if lead.customer else None
+                    'name': lead.customer.name if lead.customer else None,
+                    'company_name': lead.customer.company_name if lead.customer else None
                 },
                 'assigned_to': {
                     'id': lead.assigned_to.id if lead.assigned_to else None,
-                    'name': lead.assigned_to.get_full_name() if lead.assigned_to else None
                 },
                 'created_at': lead.created_at,
                 'updated_at': lead.updated_at
@@ -215,7 +212,7 @@ class LeadListView(AdminRequiredMixin, BaseAPIView):
         return JsonResponse({'data': data})
 
 
-class LeadCreateView(AdminRequiredMixin, BaseAPIView):
+class LeadCreateView( BaseAPIView):
     def post(self, request):
         form_data = {**request.POST.dict(), **request.json}
         form = LeadForm(form_data)
@@ -229,9 +226,7 @@ class LeadCreateView(AdminRequiredMixin, BaseAPIView):
                 'message': "Lead created successfully",
                 'data': {
                     'id': lead.id,
-                    'title': lead.title,
                     'status': lead.status,
-                    'priority': lead.priority
                 }
             }, status=201)
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -243,17 +238,16 @@ class LeadDetailView(AdminRequiredMixin, BaseAPIView):
         return JsonResponse({
             'data': {
                 'id': lead.id,
-                'title': lead.title,
                 'status': lead.status,
-                'priority': lead.priority,
-                'description': lead.description,
+                'source':lead.source,
+                'follow_up_date': lead.follow_up_date,
+                'notes': lead.notes,
                 'customer': {
                     'id': lead.customer.id if lead.customer else None,
                     'name': lead.customer.name if lead.customer else None
                 },
                 'assigned_to': {
                     'id': lead.assigned_to.id if lead.assigned_to else None,
-                    'name': lead.assigned_to.get_full_name() if lead.assigned_to else None
                 },
                 'created_at': lead.created_at,
                 'updated_at': lead.updated_at
@@ -313,14 +307,12 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
             }
         })
 
-
-# ========== Quotation Management ==========
-class QuotationListView(JWTAuthMixin,BaseAPIView):
+class QuotationListView(BaseAPIView):
     def get(self, request):
-        if request.user.role == Roles.ADMIN:
-            quotations = Quotation.objects.select_related('customer', 'assigned_to')
-        else:
-            quotations = Quotation.objects.filter(assigned_to=request.user).select_related('customer', 'assigned_to')
+        # if request.user.role == Roles.ADMIN:
+        quotations = Quotation.objects.select_related('customer', 'assigned_to')
+        # else:
+        #     quotations = Quotation.objects.filter(assigned_to=request.user).select_related('customer', 'assigned_to')
         
         data = []
         for quotation in quotations:
@@ -332,15 +324,30 @@ class QuotationListView(JWTAuthMixin,BaseAPIView):
                 'subtotal': float(quotation.subtotal),
                 'tax_total': float(quotation.tax_total),
                 'total': float(quotation.total),
+                'terms': [
+                    {
+                        'id': term.id,
+                        'title': term.title,
+                    }
+                    for term in quotation.terms.all()
+                ],   
                 'customer': {
                     'id': quotation.customer.id,
                     'name': quotation.customer.name,
-                    'email': quotation.customer.email
+                    'email': quotation.customer.email,
+                    'phone': quotation.customer.phone,
+                    'company_name': quotation.customer.company_name,
+                    'address': quotation.customer.primary_address
                 },
-                'assigned_to': {
-                    'id': quotation.assigned_to.id if quotation.assigned_to else None,
-                    'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
-                },
+                'products':[
+                    {
+                        'id': item.id,
+                        'cost_price': item.cost_price,
+                        'description': item.description,
+                        'tax_rate': float(item.tax_rate),
+                        'name' : item.name if item.name else None
+                    } for item in quotation.product.all()
+                ],
                 'created_at': quotation.created_at,
                 'emailed_at': quotation.emailed_at,
                 'follow_up_date': quotation.follow_up_date
@@ -422,40 +429,6 @@ class QuotationDetailView(JWTAuthMixin, BaseAPIView):  # FIXED: Changed from Log
             }
         })
 
-    @transaction.atomic
-    def put(self, request, quotation_id):
-        quotation = get_object_or_404(Quotation, pk=quotation_id)
-        
-        # Check permission
-        if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
-            return JsonResponse({'error': 'Permission denied'}, status=403)
-        
-        form_data = {**request.POST.dict(), **request.json}
-        form = QuotationForm(form_data, instance=quotation)
-        formset = QuotationItemFormSet(form_data, instance=quotation)
-        
-        if form.is_valid() and formset.is_valid():
-            quotation = form.save()
-            formset.save()
-            quotation.recalculate_totals()
-            
-            return JsonResponse({
-                'success': True,
-                'message': f"Quotation {quotation.quotation_number} updated successfully",
-                'data': {
-                    'id': quotation.id,
-                    'status': quotation.status,
-                    'total': float(quotation.total)
-                }
-            })
-            
-        errors = {}
-        if form.errors:
-            errors['form'] = form.errors
-        if formset.errors:
-            errors['formset'] = formset.errors
-        return JsonResponse({'success': False, 'errors': errors}, status=400)
-
     def delete(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
         
@@ -480,7 +453,7 @@ class QuotationSendView(JWTAuthMixin, BaseAPIView):
             return JsonResponse({'error': 'Permission denied'}, status=403)
         
         try:
-            send_and_archive_quotation(quotation)
+            print(f"Sending quotation {quotation.quotation_number} to {quotation.customer.email}")
             return JsonResponse({
                 'success': True,
                 'message': 'Quotation sent successfully',
@@ -546,10 +519,21 @@ class CustomerListView(AdminRequiredMixin, BaseAPIView):
 
 
 class CustomerCreateView(AdminRequiredMixin, BaseAPIView):
+
+    def _parse_request_data(self, request):
+        if request.content_type == 'application/json':
+            try:
+                return json.loads(request.body.decode('utf-8'))
+            except json.JSONDecodeError:
+                return None
+        return request.POST.dict()
+
     def post(self, request):
-        form_data = {**request.POST.dict(), **request.json}
-        form = CustomerForm(form_data)
-        
+        data = self._parse_request_data(request)
+        if data is None:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        form = CustomerForm(data)
         if form.is_valid():
             customer = form.save()
             return JsonResponse({
@@ -559,11 +543,63 @@ class CustomerCreateView(AdminRequiredMixin, BaseAPIView):
                     'id': customer.id,
                     'name': customer.name,
                     'email': customer.email,
-                    'phone': customer.phone
+                    'phone': customer.phone,
+                    'address': customer.address,
+                    'company_name': customer.company_name,
+                    'gst_number': customer.gst_number,
+                    'title': customer.title,
+                    'website': customer.website,
+                    'primary_address': customer.primary_address,
+                    'billing_address': customer.billing_address,
                 }
             }, status=201)
+
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
+    def put(self, request):
+        customer_id = request.GET.get('id')
+        if not customer_id:
+            return JsonResponse({'error': 'Customer ID required in query params'}, status=400)
+
+        customer = get_object_or_404(Customer, pk=customer_id)
+
+        data = self._parse_request_data(request)
+        if data is None:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        form = CustomerForm(data, instance=customer)
+        if form.is_valid():
+            customer = form.save(commit=False)
+            update_fields = [
+                f for f in data.keys()
+                if f in form.cleaned_data and hasattr(customer, f)
+            ]
+            for field in update_fields:
+                setattr(customer, field, form.cleaned_data[field])
+
+            customer.save(update_fields=update_fields)
+
+            updated_data = {field: getattr(customer, field) for field in update_fields}
+            updated_data['id'] = customer.id
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Customer updated successfully',
+                'data': updated_data
+            })
+
+        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+    def delete(self, request):
+        customer_id = request.GET.get('id')
+        if not customer_id:
+            return JsonResponse({'error': 'Customer ID required in query params'}, status=400)
+
+        customer = get_object_or_404(Customer, pk=customer_id)
+        customer.delete()
+        return JsonResponse({
+            'success': True,
+            'message': 'Customer deleted successfully'
+        })
 
 class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
     def get(self, request, customer_id):
@@ -653,7 +689,7 @@ class CustomerSearchView(BaseAPIView):
             })
         return JsonResponse({'data': data})
     
-class ProductListView(JWTAuthMixin, BaseAPIView):
+class ProductListView(BaseAPIView):
     def get(self, request):
         products = Product.objects.all()
         data = []
@@ -679,10 +715,21 @@ class ProductListView(JWTAuthMixin, BaseAPIView):
 
 
 class ProductCreateView(JWTAuthentication, BaseAPIView):
+
+    def _parse_request_data(self, request):
+        if request.content_type == 'application/json':
+            try:
+                return json.loads(request.body.decode('utf-8'))
+            except json.JSONDecodeError:
+                return None
+        return request.POST.dict()
+
     def post(self, request):
-        form_data = {**request.POST.dict(), **request.json}
-        form = ProductForm(form_data)
-        
+        data = self._parse_request_data(request)
+        if data is None:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        form = ProductForm(data)
         if form.is_valid():
             product = form.save()
             return JsonResponse({
@@ -699,8 +746,56 @@ class ProductCreateView(JWTAuthentication, BaseAPIView):
                     'unit': product.unit
                 }
             }, status=201)
+
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
+    def put(self, request):
+        product_id = request.GET.get('id')
+        if not product_id:
+            return JsonResponse({'error': 'Product ID required in query params'}, status=400)
+
+        product = get_object_or_404(Product, pk=product_id)
+
+        data = self._parse_request_data(request)
+        if data is None:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        form = ProductForm(data, instance=product)
+        if form.is_valid():
+            product = form.save(commit=False)
+
+            update_fields = [
+                f for f in data.keys()
+                if f in form.cleaned_data and hasattr(product, f)
+            ]
+            for field in update_fields:
+                setattr(product, field, form.cleaned_data[field])
+
+            product.save(update_fields=update_fields)
+
+            updated_data = {field: getattr(product, field) for field in update_fields}
+            updated_data['id'] = product.id
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Product updated successfully',
+                'data': updated_data
+            })
+
+        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+    def delete(self, request):
+        product_id = request.GET.get('id')
+        if not product_id:
+            return JsonResponse({'error': 'Product ID required in query params'}, status=400)
+
+        product = get_object_or_404(Product, pk=product_id)
+        product.active = False
+        product.save(update_fields=['active'])
+        return JsonResponse({
+            'success': True,
+            'message': 'Product deactivated successfully',
+            'data': {'active': product.active}
+        })
 
 class ProductDetailView(JWTAuthMixin, BaseAPIView):
     def get(self, request, product_id):
@@ -759,7 +854,6 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
             'data': {'active': product.active}
         })
 
-# ========== Dashboard Data ==========
 class AdminDashboardStatsView(AdminRequiredMixin, BaseAPIView):
     def get(self, request):
         stats = {

@@ -1,5 +1,5 @@
 from django import forms
-from .models import Customer, Product, Quotation, QuotationItem, TermsAndConditions, EmailTemplate
+from .models import Customer, Product, Quotation, TermsAndConditions, EmailTemplate
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from .models import Lead, Customer
@@ -8,9 +8,10 @@ from apps.accounts.models import User,Roles
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
-        fields = ["name", "company_name", "email", "phone", "address", "gst_number","title","website","primary_address","billing_address","shipping_address"]
+        fields = ["id","name", "company_name", "email", "phone", "address", "gst_number","title","website","primary_address","billing_address","shipping_address"]
 
 class ProductForm(forms.ModelForm):
+    discount = forms.DecimalField(required=False, max_digits=10, decimal_places=2, initial=0)
     class Meta:
         model = Product
         fields = [
@@ -18,18 +19,18 @@ class ProductForm(forms.ModelForm):
             "selling_price", "tax_rate", "unit", "weight", 
             "dimensions", "warranty_months", "brand", "is_available", "active"
         ]
-class QuotationItemForm(forms.ModelForm):
-    class Meta:
-        model = QuotationItem
-        fields = ["product", "description", "quantity", "unit_price", "tax_rate"]
+# class QuotationItemForm(forms.ModelForm):
+#     class Meta:
+#         model = QuotationItem
+#         fields = ["product", "description", "quantity", "unit_price", "tax_rate"]
 
-QuotationItemFormSet = forms.inlineformset_factory(
-    Quotation,
-    QuotationItem,
-    form=QuotationItemForm,
-    extra=1,
-    can_delete=True,
-)
+# QuotationItemFormSet = forms.inlineformset_factory(
+#     Quotation,
+#     QuotationItem,
+#     form=QuotationItemForm,
+#     extra=1,
+#     can_delete=True,
+# )
 
 class QuotationForm(forms.ModelForm):
     class Meta:
@@ -41,12 +42,11 @@ class QuotationForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make most fields optional with sensible defaults
         self.fields['assigned_to'].required = False
         self.fields['terms'].required = False
         self.fields['email_template'].required = False
         self.fields['follow_up_date'].required = False
-        self.fields['status'].required = False  # Will default to PENDING
+        self.fields['status'].required = False
         
 class SalespersonForm(UserCreationForm):
     first_name = forms.CharField(required=True)
@@ -79,13 +79,19 @@ class SalespersonForm(UserCreationForm):
 class LeadForm(forms.ModelForm):
     customer_name = forms.CharField(required=True)
     customer_email = forms.EmailField(required=True)
-    customer_phone = forms.CharField(required=False)
+    customer_phone = forms.CharField(required=True)
     customer_company = forms.CharField(required=False)
-    
+    customer_primary_address = forms.CharField(required=False)
+    customer_billing_address = forms.CharField(required=False)
+    customer_shipping_address = forms.CharField(required=False)
+
     class Meta:
         model = Lead
-        fields = ['customer_name', 'customer_email', 'customer_phone', 'customer_company', 
-                 'status', 'source', 'follow_up_date', 'notes', 'assigned_to']
+        fields = [
+            'customer_name', 'customer_email', 'customer_phone', 'customer_company',
+            'customer_primary_address', 'customer_billing_address', 'customer_shipping_address',
+            'status', 'source', 'follow_up_date', 'notes', 'assigned_to'
+        ]
         widgets = {
             'follow_up_date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
@@ -94,20 +100,50 @@ class LeadForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['assigned_to'].queryset = User.objects.filter(role=Roles.SALESPERSON)
-        
-        customer = getattr(self.instance, "customer", None)
-        if customer:
-            self.fields['customer_name'].initial = customer.name
-            self.fields['customer_email'].initial = customer.email
-            self.fields['customer_phone'].initial = customer.phone
-            self.fields['customer_company'].initial = customer.company_name
+        if customer := getattr(self.instance, "customer", None):
+            mapping = {
+                'name': 'customer_name',
+                'email': 'customer_email',
+                'phone': 'customer_phone',
+                'company_name': 'customer_company',
+                'primary_address': 'customer_primary_address',
+                'billing_address': 'customer_billing_address',
+                'shipping_address': 'customer_shipping_address',
+            }
+            for attr, field_name in mapping.items():
+                self.fields[field_name].initial = getattr(customer, attr, '')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        customer_data = {
+            'name': cleaned_data.get('customer_name'),
+            'email': cleaned_data.get('customer_email'),
+            'phone': cleaned_data.get('customer_phone'),
+            'company_name': cleaned_data.get('customer_company'),
+            'primary_address': cleaned_data.get('customer_primary_address'),
+            'billing_address': cleaned_data.get('customer_billing_address'),
+            'shipping_address': cleaned_data.get('customer_shipping_address'),
+        }
+        customer, _ = Customer.objects.update_or_create(
+            email=customer_data['phone'],
+            defaults=customer_data
+        )
+
+        cleaned_data['customer'] = customer
+        return cleaned_data
+
+    def save(self, commit=True):
+        lead = super().save(commit=False)
+        lead.customer = self.cleaned_data['customer']
+        if commit:
+            lead.save()
+        return lead
 
 
     def clean(self):
         cleaned_data = super().clean()
         customer_email = cleaned_data.get('customer_email')
         
-        # Check if customer exists or create new
         customer, created = Customer.objects.get_or_create(
             email=customer_email,
             defaults={
@@ -118,7 +154,6 @@ class LeadForm(forms.ModelForm):
         )
         
         if not created:
-            # Update existing customer if needed
             update_fields = {}
             if customer.name != cleaned_data.get('customer_name'):
                 update_fields['name'] = cleaned_data.get('customer_name')

@@ -80,8 +80,6 @@ class QuotationCreateView(BaseAPIView):
                     'success': False,
                     'error': 'At least one item is required'
                 }, status=400)
-
-            # Validate items
             for i, item in enumerate(items_data):
                 if 'product' not in item:
                     return JsonResponse({
@@ -115,11 +113,7 @@ class QuotationCreateView(BaseAPIView):
                 )
                 if salesperson:
                     quotation.assigned_to = salesperson
-
-            # Save the quotation instance first.
             super(Quotation, quotation).save()
-
-            # Handle products (ManyToMany relationship)
             product_ids = [item.get('product') for item in items_data if item.get('product')]
             quotation.product.set(product_ids)
 
@@ -299,12 +293,6 @@ class QuotationCreateView(BaseAPIView):
             return []
 
     def _recalculate_totals_from_items(self, quotation, items_data):
-        """
-        Calculates subtotal, tax, and total from item data.
-        It uses unit_price and tax_rate from the request if provided,
-        otherwise it falls back to the values from the Product model.
-        """
-        # Fetch all relevant products in a single efficient query
         product_ids = [item.get('product') for item in items_data if item.get('product')]
         products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
 
@@ -314,11 +302,10 @@ class QuotationCreateView(BaseAPIView):
         for item in items_data:
             product = products.get(item.get('product'))
             if not product:
-                continue # Skip if product not found
+                continue
 
             quantity = Decimal(str(item.get('quantity', 1)))
 
-            # Use price from request JSON if available, else from Product model
             unit_price_from_request = item.get('unit_price')
             unit_price = (
                 Decimal(str(unit_price_from_request))

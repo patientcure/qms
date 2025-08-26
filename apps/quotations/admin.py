@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CompanyProfile, Customer, Product, TermsAndConditions, EmailTemplate, Lead, Quotation, QuotationItem, EmailLog, ActivityLog
+from .models import CompanyProfile, Customer, Product, TermsAndConditions, EmailTemplate, Lead, Quotation, EmailLog, ActivityLog
 
 @admin.register(CompanyProfile)
 class CompanyProfileAdmin(admin.ModelAdmin):
@@ -24,16 +24,12 @@ class TnCAdmin(admin.ModelAdmin):
 class EmailTemplateAdmin(admin.ModelAdmin):
     list_display = ('title', 'subject', 'is_default', 'updated_at')
 
-class QuotationItemInline(admin.TabularInline):
-    model = QuotationItem
-    extra = 1
 
 @admin.register(Quotation)
 class QuotationAdmin(admin.ModelAdmin):
     list_display = ('quotation_number', 'customer', 'assigned_to', 'status', 'total', 'follow_up_date', 'created_at')
     list_filter = ('status', 'assigned_to', 'created_at', 'follow_up_date')
     search_fields = ('quotation_number', 'customer__name', 'customer__email')
-    inlines = [QuotationItemInline]
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
