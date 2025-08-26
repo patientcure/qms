@@ -15,8 +15,13 @@ from .models import TermsAndConditions as Term
 
 
 class QuotationPDFGenerator:
-    def __init__(self, quotation, company_profile=None, terms=None):
+    def __init__(self, quotation, items_data, company_profile=None, terms=None):
+        """
+        MODIFIED: Accepts items_data (list of dicts) instead of relying on
+        a database relationship.
+        """
         self.quotation = quotation
+        self.items_data = items_data
         self.company = company_profile
         self.terms = terms or []
         self.styles = getSampleStyleSheet()
@@ -35,9 +40,9 @@ class QuotationPDFGenerator:
         self.dark_gray = colors.Color(55/255, 65/255, 81/255)  # #374151
         self.medium_gray = colors.Color(75/255, 85/255, 99/255)  # #4b5563
         self.border_gray = colors.Color(209/255, 213/255, 219/255)  # #d1d5db
-        
+
         self._define_styles()
-    
+
     def _define_styles(self):
         # Main title style - large and bold
         self.title_style = ParagraphStyle(
@@ -49,7 +54,7 @@ class QuotationPDFGenerator:
             alignment=TA_LEFT,
             textColor=colors.Color(17/255, 24/255, 39/255)  # #111827
         )
-        
+
         # Company name style - blue accent
         self.company_name_style = ParagraphStyle(
             'CompanyName',
@@ -60,7 +65,7 @@ class QuotationPDFGenerator:
             alignment=TA_RIGHT,
             textColor=self.primary_blue
         )
-        
+
         # Section headings
         self.section_heading_style = ParagraphStyle(
             'SectionHeading',
@@ -71,7 +76,7 @@ class QuotationPDFGenerator:
             spaceBefore=16,
             textColor=colors.Color(17/255, 24/255, 39/255)  # #111827
         )
-        
+
         # Normal text
         self.normal_style = ParagraphStyle(
             'Normal',
@@ -79,7 +84,7 @@ class QuotationPDFGenerator:
             fontSize=10,
             textColor=self.dark_gray
         )
-        
+
         # Bold text
         self.bold_style = ParagraphStyle(
             'Bold',
@@ -88,7 +93,7 @@ class QuotationPDFGenerator:
             fontName='Helvetica-Bold',
             textColor=self.dark_gray
         )
-        
+
         # Right aligned text
         self.right_style = ParagraphStyle(
             'Right',
@@ -97,7 +102,7 @@ class QuotationPDFGenerator:
             alignment=TA_RIGHT,
             textColor=self.dark_gray
         )
-        
+
         # Small text for company details
         self.small_text_style = ParagraphStyle(
             'SmallText',
@@ -106,7 +111,7 @@ class QuotationPDFGenerator:
             textColor=self.medium_gray,
             alignment=TA_RIGHT
         )
-        
+
         # Info label style
         self.info_label_style = ParagraphStyle(
             'InfoLabel',
@@ -115,7 +120,7 @@ class QuotationPDFGenerator:
             fontName='Helvetica-Bold',
             textColor=self.dark_gray
         )
-        
+
         # Terms styles
         self.terms_heading_style = ParagraphStyle(
             'TermsHeading',
@@ -126,7 +131,7 @@ class QuotationPDFGenerator:
             spaceBefore=6,
             textColor=colors.Color(17/255, 24/255, 39/255)
         )
-        
+
         self.terms_content_style = ParagraphStyle(
             'TermsContent',
             parent=self.styles['Normal'],
@@ -134,7 +139,7 @@ class QuotationPDFGenerator:
             spaceAfter=6,
             textColor=self.dark_gray
         )
-        
+
         # Footer style
         self.footer_style = ParagraphStyle(
             'Footer',
@@ -143,7 +148,7 @@ class QuotationPDFGenerator:
             alignment=TA_CENTER,
             textColor=self.medium_gray
         )
-    
+
     def _add_header_border(self, elements):
         """Add a blue border line similar to HTML template"""
         # Create a blue line using a table with background color
@@ -158,27 +163,27 @@ class QuotationPDFGenerator:
         elements.append(line_table)
         elements.append(Spacer(1, 8 * mm))
         return elements
-    
+
     def _build_company_header(self):
         elements = []
-        
+
         header_data = []
-        
+
         left_content = []
         left_content.append(Paragraph("QUOTATION", self.title_style))
-        
+
         quotation_info = f"<b>Quotation No:</b> {self.quotation.quotation_number}<br/>"
         quotation_info += f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}<br/>"
         if self.quotation.follow_up_date:
             quotation_info += f"<b>Valid Until:</b> {self.quotation.follow_up_date.strftime('%d-%m-%Y')}"
-        
+
         left_content.append(Paragraph(quotation_info, self.normal_style))
-        
+
         # Right side - Company info
         right_content = []
         if self.company:
             right_content.append(Paragraph(self.company.name or "Your Company", self.company_name_style))
-            
+
             company_details = ""
             if self.company.address:
                 company_details += f"{self.company.address}<br/>"
@@ -188,19 +193,19 @@ class QuotationPDFGenerator:
                 company_details += f"Email: {self.company.email}<br/>"
             if self.company.gst_number:
                 company_details += f"GST: {self.company.gst_number}"
-            
+
             if company_details:
                 right_content.append(Paragraph(company_details, self.small_text_style))
-        
+
         # Combine left and right in a table
         left_cell = []
         for item in left_content:
             left_cell.append(item)
-        
+
         right_cell = []
         for item in right_content:
             right_cell.append(item)
-        
+
         header_table = Table([[left_cell, right_cell]], colWidths=[85 * mm, 85 * mm])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -209,20 +214,20 @@ class QuotationPDFGenerator:
             ('TOPPADDING', (0, 0), (-1, -1), 0),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 20),
         ]))
-        
+
         elements.append(header_table)
-        
+
         # Add the blue border line
         elements = self._add_header_border(elements)
-        
+
         return elements
-    
+
     def _build_customer_info(self):
         elements = []
         elements.append(Paragraph("Bill To:", self.section_heading_style))
-        
+
         customer = self.quotation.customer
-        
+
         # Create customer info in a styled box (using table with background)
         customer_info = ""
         if customer:
@@ -239,7 +244,7 @@ class QuotationPDFGenerator:
                 customer_info += f"<b>Address:</b> {customer.address}"
         else:
             customer_info = "<i>No customer information available</i>"
-        
+
         # Create a background box for customer info
         customer_data = [[Paragraph(customer_info, self.normal_style)]]
         customer_table = Table(customer_data, colWidths=[170 * mm])
@@ -252,43 +257,48 @@ class QuotationPDFGenerator:
             ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
             ('GRID', (0, 0), (-1, -1), 0.5, self.border_gray),
         ]))
-        
+
         elements.append(customer_table)
         elements.append(Spacer(1, 8 * mm))
         return elements
-    
+
     def _build_items_table(self):
+        """
+        MODIFIED: Iterates over self.items_data (a list of dictionaries from the request)
+        instead of a database query.
+        """
         elements = []
-        
+
         # Table headers
         headers = ['S.No.', 'Product/Service', 'Quantity', 'Rate', 'Amount']
         table_data = [headers]
-        
-        # Add items
-        for idx, item in enumerate(self.quotation.items.select_related('product').all(), 1):
-            unit_price = float(item.unit_price)
-            quantity = float(item.quantity)
-            tax_rate = float(item.tax_rate) if item.tax_rate else 0
+
+        # Add items from self.items_data
+        for idx, item in enumerate(self.items_data, 1):
+            unit_price = float(item.get('unit_price', 0))
+            quantity = float(item.get('quantity', 0))
             
-            # Calculate amount including tax
+            product_name = item.get('product', {}).get('name', 'N/A')
+            description = item.get('description') or product_name
+
             amount = quantity * unit_price
-            
+
             row = [
                 Paragraph(str(idx), self.normal_style),
-                Paragraph(item.product.name if item.product else (item.description or "N/A"), self.normal_style),
-                Paragraph(str(int(quantity) if quantity.is_integer() else quantity), self.normal_style),
+                Paragraph(description, self.normal_style),
+                Paragraph(str(int(quantity) if quantity == int(quantity) else quantity), self.normal_style),
                 Paragraph(f"Rs. {unit_price:.2f}", self.normal_style),
                 Paragraph(f"Rs. {amount:.2f}", self.normal_style),
             ]
             table_data.append(row)
-        
+
         # Create table with styling similar to HTML template
         item_table = Table(
-            table_data, 
+            table_data,
             colWidths=[15 * mm, 70 * mm, 25 * mm, 30 * mm, 30 * mm],
             repeatRows=1
         )
-        
+
         item_table.setStyle(TableStyle([
             # Header styling
             ('BACKGROUND', (0, 0), (-1, 0), colors.Color(239/255, 246/255, 255/255)),  # #eff6ff
@@ -302,7 +312,7 @@ class QuotationPDFGenerator:
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('LEFTPADDING', (0, 0), (-1, -1), 12),
             ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-            
+
             # Data rows styling
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('TEXTCOLOR', (0, 1), (-1, -1), self.dark_gray),
@@ -313,25 +323,31 @@ class QuotationPDFGenerator:
             ('FONTSIZE', (0, 1), (-1, -1), 10),
             ('TOPPADDING', (0, 1), (-1, -1), 12),
             ('BOTTOMPADDING', (0, 1), (-1, -1), 12),
-            
+
             # Grid
             ('GRID', (0, 0), (-1, -1), 1, self.border_gray)
         ]))
-        
+
         elements.append(item_table)
         elements.append(Spacer(1, 8 * mm))
         return elements
-    
+
     def _build_totals(self):
+        """
+        MODIFIED: Calculates totals from self.items_data to ensure consistency.
+        """
         elements = []
 
-        # Compute totals dynamically
-        subtotal = sum(item.quantity * item.unit_price for item in self.quotation.items.all())
-        tax_total = sum(item.quantity * item.unit_price * (item.tax_rate / 100 if item.tax_rate else 0) for item in self.quotation.items.all())
+        # Compute totals dynamically from items_data
+        subtotal = sum(float(item.get('quantity', 0)) * float(item.get('unit_price', 0)) for item in self.items_data)
+        tax_total = sum(
+            float(item.get('quantity', 0)) * float(item.get('unit_price', 0)) * (float(item.get('tax_rate', 0)) / 100)
+            for item in self.items_data
+        )
 
         # Discount calculation
         discount_percent = getattr(self.quotation, 'discount', 0) or 0
-        discount_amount = subtotal * (discount_percent / 100)
+        discount_amount = subtotal * (float(discount_percent) / 100)
         subtotal_after_discount = subtotal - discount_amount
 
         grand_total = subtotal_after_discount + tax_total
@@ -339,7 +355,7 @@ class QuotationPDFGenerator:
         # Create summary box similar to HTML template
         totals_data = [
             [Paragraph("Subtotal:", self.normal_style), Paragraph(f"Rs. {subtotal:.2f}", self.normal_style)],
-            [Paragraph("Discount ({:.2f}%):".format(discount_percent), self.normal_style), Paragraph(f"- Rs. {discount_amount:.2f}", self.normal_style)],
+            [Paragraph("Discount ({:.2f}%):".format(float(discount_percent)), self.normal_style), Paragraph(f"- Rs. {discount_amount:.2f}", self.normal_style)],
             [Paragraph("Subtotal after Discount:", self.normal_style), Paragraph(f"Rs. {subtotal_after_discount:.2f}", self.normal_style)],
             [Paragraph("Tax Total:", self.normal_style), Paragraph(f"Rs. {tax_total:.2f}", self.normal_style)],
             [Paragraph("Total Amount:", ParagraphStyle(
@@ -383,7 +399,7 @@ class QuotationPDFGenerator:
         elements.append(summary_container)
         elements.append(Spacer(1, 10 * mm))
         return elements
-    
+
     def _build_terms(self):
         elements = []
         terms_to_display = []
@@ -404,7 +420,7 @@ class QuotationPDFGenerator:
 
         if terms_to_display:
             elements.append(Paragraph("Terms & Conditions:", self.section_heading_style))
-            
+
             for term in terms_to_display:
                 elements.append(Paragraph(term.title, self.terms_heading_style))
                 content = getattr(term, 'content_html', '') or str(getattr(term, 'content', ''))
@@ -412,18 +428,18 @@ class QuotationPDFGenerator:
                     # Extract bullet points from stars and normal text
                     bullet_points = re.findall(r'\*(.*?)\*', content)
                     normal_text = re.sub(r'\*(.*?)\*', '', content).strip()
-                    
+
                     # Add normal text first if exists
                     if normal_text:
                         clean_normal_text = self._clean_html_content(normal_text)
                         if clean_normal_text:
                             elements.append(Paragraph(clean_normal_text, self.terms_content_style))
-                    
+
                     # Add bullet points if exists
                     if bullet_points:
                         bullet_items = [ListItem(Paragraph(bp.strip(), self.terms_content_style)) for bp in bullet_points]
                         elements.append(ListFlowable(bullet_items, bulletType='bullet', leftIndent=10 * mm))
-                
+
                 elements.append(Spacer(1, 5 * mm))
         else:
             # Default terms if none specified
@@ -434,7 +450,7 @@ class QuotationPDFGenerator:
             elements.append(Paragraph(default_terms, self.terms_content_style))
 
         return elements
-    
+
     def _clean_html_content(self, html_content):
         if not html_content:
             return ""
@@ -448,41 +464,41 @@ class QuotationPDFGenerator:
         content = re.sub(r'<[^>]+>', '', content)
         content = re.sub(r'\n\s*\n', '\n\n', content)
         return content.strip()
-    
+
     def _build_footer(self):
         elements = []
         elements.append(Spacer(1, 15 * mm))
-        
+
         # Thank you message and signature section
         footer_data = [
-            [Paragraph("Thank you for your business!", self.normal_style), 
+            [Paragraph("Thank you for your business!", self.normal_style),
              Paragraph("Digitally Signed <br/>Admin Authorized", self.right_style)]
         ]
-        
+
         footer_table = Table(footer_data, colWidths=[85 * mm, 85 * mm])
         footer_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 0),
         ]))
-        
+
         elements.append(footer_table)
-        
+
         # Generation info
         elements.append(Spacer(1, 10 * mm))
         footer_text = f"Generated on {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         if self.company:
             footer_text += f" | {self.company.name}"
         elements.append(Paragraph(footer_text, self.footer_style))
-        
+
         return elements
-    
+
     def _add_page_number(self, canvas_obj: canvas.Canvas, doc):
         page_num = canvas_obj.getPageNumber()
         canvas_obj.setFont("Helvetica", 8)
         canvas_obj.setFillColor(self.medium_gray)
         canvas_obj.drawRightString(200 * mm, 10 * mm, f"Page {page_num}")
-    
+
     def generate(self):
         elements = []
         elements.extend(self._build_company_header())
@@ -491,7 +507,7 @@ class QuotationPDFGenerator:
         elements.extend(self._build_totals())
         elements.extend(self._build_terms())
         elements.extend(self._build_footer())
-        
+
         self.doc.build(elements, onFirstPage=self._add_page_number, onLaterPages=self._add_page_number)
         pdf = self.buffer.getvalue()
         self.buffer.close()
