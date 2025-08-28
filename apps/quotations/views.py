@@ -448,7 +448,6 @@ class QuotationSendView(JWTAuthMixin, BaseAPIView):
     def post(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
         
-        # Check permission
         if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
             return JsonResponse({'error': 'Permission denied'}, status=403)
         

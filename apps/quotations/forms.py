@@ -33,6 +33,7 @@ class ProductForm(forms.ModelForm):
 # )
 
 class QuotationForm(forms.ModelForm):
+    discount_type = forms.CharField(required=False)
     class Meta:
         model = Quotation
         fields = [

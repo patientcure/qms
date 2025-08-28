@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 from apps.accounts.models import User, Roles
 from django.db.models import Count
 from decimal import Decimal
-
+from .email_service import send_quotation_email
 class QuotationCreateView(BaseAPIView):
     @transaction.atomic
     def put(self, request):
@@ -41,8 +41,6 @@ class QuotationCreateView(BaseAPIView):
                 }, status=404)
 
             form_data = {**request.POST.dict(), **request_json}
-
-            # --- Customer Handling ---
             customer_data = form_data.get('customer', {})
             if not isinstance(customer_data, dict):
                 customer_data = {}
@@ -141,6 +139,7 @@ class QuotationCreateView(BaseAPIView):
 
             if send_immediately:
                 quotation.refresh_from_db()
+                send_quotation_email(quotation)
 
             quotation_data = self._get_quotation_response_data(quotation, items_data, valid_term_ids)
             quotation_data['pdf_url'] = pdf_url
@@ -231,12 +230,8 @@ class QuotationCreateView(BaseAPIView):
                     quotation.assigned_to = salesperson
 
             super(Quotation, quotation).save()
-
-            # Set products for the new ManyToManyField
             product_ids = [item.get('product') for item in items_data if item.get('product')]
             quotation.product.set(product_ids)
-
-            # Calculate totals from request data
             self._recalculate_totals_from_items(quotation, items_data)
 
             if valid_term_ids:
@@ -260,6 +255,7 @@ class QuotationCreateView(BaseAPIView):
 
             if send_immediately:
                 quotation.refresh_from_db()
+                send_quotation_email(quotation)
 
             quotation_data = self._get_quotation_response_data(quotation, items_data, valid_term_ids)
             quotation_data['pdf_url'] = pdf_url
@@ -344,10 +340,6 @@ class QuotationCreateView(BaseAPIView):
         return JsonResponse({'success': False, 'errors': errors}, status=400)
 
     def _get_quotation_response_data(self, quotation, items_data, term_ids=None):
-        """
-        Generates the JSON response for the quotation.
-        Ensures the item details in the response reflect the actual data used for calculation.
-        """
         try:
             product_ids = [item.get('product') for item in items_data if item.get('product')]
             products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
