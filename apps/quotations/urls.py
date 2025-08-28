@@ -36,6 +36,7 @@ from .views import (
     ProductListView,
     ProductCreateView,
     ProductDetailView,
+    CategoryViewSet,
     
     # Dashboard Stats
     AdminDashboardStatsView,
@@ -72,6 +73,15 @@ urlpatterns = [
     path('api/products/create/', ProductCreateView.as_view(), name='product_create'),
     path('api/products/<int:product_id>/', ProductDetailView.as_view(), name='product_detail'),
     path('api/products/search/', ProductSearchView.as_view(), name='product_search'),
+
+    # ========== NEW URLS FOR CATEGORY VIEWSET ==========
+    # This single path handles both GET (to list) and POST (to create)
+    path('api/categories/', CategoryViewSet.as_view({'get': 'list', 'post': 'create'}), name='category-list-create'),
+    
+    # This single path handles GET (one), PUT/PATCH (update), and DELETE
+    path('api/categories/<int:pk>/', CategoryViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='category-detail'),
+    # =================================================
+
     # ========== Customer Management API ==========
     path('api/customers/', CustomerListView.as_view(), name='customer_list'),
     path('api/customers/create/', CustomerCreateView.as_view(), name='customer_create'),
@@ -83,7 +93,6 @@ urlpatterns = [
     path('api/dashboard/salesperson/stats/', SalespersonDashboardStatsView.as_view(), name='salesperson_dashboard_stats'),
 
     #============Terms API ==================
-
     path('api/terms/', TermsListView.as_view(), name='terms-list'),
     path('api/terms/create/', TermsCreateView.as_view(), name='terms-create'),
 ]

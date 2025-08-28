@@ -13,7 +13,7 @@ import json
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-
+from apps.accounts.models import User,Roles
 class ProtectedView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -24,7 +24,6 @@ class ProtectedView(APIView):
         })
 
 User = get_user_model()
-from rest_framework_simplejwt.tokens import RefreshToken
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -32,8 +31,6 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
-
-
 
 @method_decorator(csrf_exempt, name='dispatch')
 class BaseAPIView(View):
@@ -111,69 +108,96 @@ class SalespersonLoginView(BaseAPIView):
         else:
             return JsonResponse({'success': False, 'error': 'Invalid credentials or insufficient permissions'}, status=401)
 
-
-class CreateAdminView(BaseAPIView):
+#region Create
+class CreateUserView(BaseAPIView):
     def post(self, request):
-        # Optional: Check if admin already exists
-        # if User.objects.filter(role="ADMIN").exists():
-        #     return JsonResponse({
-        #         'success': False, 
-        #         'error': 'Admin already exists'
-        #     }, status=400)
-        
-        username = request.json.get("username") or request.POST.get("username")
-        email = request.json.get("email") or request.POST.get("email")
-        password = request.json.get("password") or request.POST.get("password")
-        first_name = request.json.get("first_name") or request.POST.get("first_name", "")
-        last_name = request.json.get("last_name") or request.POST.get("last_name", "")
-        
-        if not all([username, email, password]):
+        data = request.json or request.POST
+        username = data.get("username")
+        email = data.get("email")
+        password = data.get("password")
+        role = data.get("role")
+        first_name = data.get("first_name", "")
+        last_name = data.get("last_name", "")
+        phone_number=data.get("phone",None)
+        address=data.get("address",None)
+        if not all([username, email, password, role]):
             return JsonResponse({
-                'success': False, 
-                'error': 'Username, email, and password are required'
+                'success': False,
+                'error': 'Username, email, password, and role are required'
+            }, status=400)
+        if role.upper() not in Roles.values:
+            return JsonResponse({
+                'success': False,
+                'error': f"Invalid role. Choose from {', '.join(Roles.values)}"
             }, status=400)
         
-        # Check if username already exists
         if User.objects.filter(username=username).exists():
-            return JsonResponse({
-                'success': False, 
-                'error': 'Username already exists'
-            }, status=400)
+            return JsonResponse({'success': False, 'error': 'Username already exists'}, status=400)
         
-        # Check if email already exists
         if User.objects.filter(email=email).exists():
-            return JsonResponse({
-                'success': False, 
-                'error': 'Email already exists'
-            }, status=400)
+            return JsonResponse({'success': False, 'error': 'Email already exists'}, status=400)
         
         try:
             user = User.objects.create_user(
-                username=username, 
-                email=email, 
-                password=password, 
-                role="ADMIN",
+                username=username,
+                email=email,
+                password=password,
+                role=role.upper(),
                 first_name=first_name,
-                last_name=last_name
+                last_name=last_name,
+                phone_number=phone_number,
+                address=address
             )
             return JsonResponse({
                 'success': True,
-                'message': 'Admin created successfully',
+                'message': f'{user.get_role_display()} user created successfully',
                 'data': {
                     'user': {
                         'id': user.id,
                         'username': user.username,
                         'email': user.email,
-                        'role': user.role
+                        'role': user.role,
+                        'phone_number':user.phone_number,
+                        'address':user.address,
+                        'first_name': user.first_name,
+                        'last_name': user.last_name,
+                        'is_active': user.is_active,
+                        'date_joined': user.date_joined,
                     }
                 }
             }, status=201)
         except Exception as e:
             return JsonResponse({
-                'success': False, 
-                'error': f'Failed to create admin: {str(e)}'
+                'success': False,
+                'error': f'Failed to create user: {str(e)}'
             }, status=400)
 
+class UserListView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != "ADMIN":
+            return JsonResponse({
+                'success': False,
+                'error': 'Permission denied. Administrator access required.'
+            }, status=403)
+        
+        users = User.objects.all().order_by('first_name', 'last_name')        
+        data = [{
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'phone_number':user.phone_number,
+            'address':user.address,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'role': user.role,
+            'is_active': user.is_active,
+            'date_joined': user.date_joined
+        } for user in users]
+
+        return JsonResponse({'success': True, 'data': data})
 
 
 class LogoutView(BaseAPIView):
@@ -185,7 +209,6 @@ class LogoutView(BaseAPIView):
             return JsonResponse({'success': True, 'message': 'Logged out successfully'})
         except Exception:
             return JsonResponse({'success': False, 'error': 'Invalid refresh token'}, status=400)
-
 
 
 class CurrentUserView(LoginRequiredMixin, View):
@@ -214,23 +237,17 @@ class QuotationStatusUpdateView(LoginRequiredMixin, BaseAPIView):
     def put(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
         
-        # Permission check
         if request.user.role == "SALESPERSON" and quotation.assigned_to != request.user:
-            return JsonResponse({
-                'success': False, 
-                'error': 'Permission denied'
-            }, status=403)
+            return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
         
         changes = []
         
-        # Update status
         status = request.json.get("status")
         if status and status in dict(QuotationStatus.choices) and status != quotation.status:
             old_status = quotation.status
             quotation.status = status
             changes.append(f"Status changed from {old_status} to {status}")
         
-        # Update follow-up date
         follow_up_date_str = request.json.get("follow_up_date")
         if follow_up_date_str:
             try:
@@ -240,10 +257,7 @@ class QuotationStatusUpdateView(LoginRequiredMixin, BaseAPIView):
                     quotation.follow_up_date = new_date
                     changes.append(f"Follow-up date changed from {old_date} to {new_date}")
             except ValueError:
-                return JsonResponse({
-                    'success': False, 
-                    'error': 'Invalid follow-up date format. Use YYYY-MM-DD.'
-                }, status=400)
+                return JsonResponse({'success': False, 'error': 'Invalid follow-up date format. Use YYYY-MM-DD.'}, status=400)
         
         if changes:
             quotation.save(update_fields=['status', 'follow_up_date'])
@@ -280,22 +294,19 @@ class QuotationStatusUpdateView(LoginRequiredMixin, BaseAPIView):
 # ========== Lead Status Update API ==========
 class LeadStatusUpdateView(LoginRequiredMixin, BaseAPIView):
     def put(self, request, lead_id):
-        # Only allow salesperson to update their own leads
         if request.user.role == "SALESPERSON":
             lead = get_object_or_404(Lead, pk=lead_id, assigned_to=request.user)
-        else:  # Admin can update any lead
+        else:
             lead = get_object_or_404(Lead, pk=lead_id)
         
         changes = []
         
-        # Update status
         status = request.json.get("status")
         if status and status != lead.status:
             old_status = lead.status
             lead.status = status
             changes.append(f"Status changed from {old_status} to {status}")
         
-        # Update follow-up date
         follow_up_date_str = request.json.get("follow_up_date")
         if follow_up_date_str:
             try:
@@ -305,11 +316,8 @@ class LeadStatusUpdateView(LoginRequiredMixin, BaseAPIView):
                     lead.follow_up_date = new_date
                     changes.append(f"Follow-up date changed from {old_date} to {new_date}")
             except ValueError:
-                return JsonResponse({
-                    'success': False, 
-                    'error': 'Invalid follow-up date format. Use YYYY-MM-DD.'
-                }, status=400)
-        elif follow_up_date_str == "":  # Explicitly remove follow-up date
+                return JsonResponse({'success': False, 'error': 'Invalid follow-up date format. Use YYYY-MM-DD.'}, status=400)
+        elif follow_up_date_str == "":
             if lead.follow_up_date:
                 old_date = lead.follow_up_date
                 lead.follow_up_date = None

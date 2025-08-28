@@ -13,7 +13,7 @@ import json
 from apps.accounts.models import User, Roles
 from .models import (
     Quotation, Lead, Customer, Product,
-    TermsAndConditions, CompanyProfile, ActivityLog
+    TermsAndConditions, CompanyProfile, ActivityLog,Category
 )
 from .forms import (
     SalespersonForm, LeadForm,
@@ -21,7 +21,8 @@ from .forms import (
     CustomerForm, ProductForm
 )
 from .choices import ActivityAction
-
+from .serializers import CategorySerializer
+from rest_framework import viewsets
 from django.http import JsonResponse
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
@@ -658,7 +659,7 @@ class ProductSearchView(JWTAuthMixin, BaseAPIView):
             data.append({
                 'id': product.id,
                 'name': product.name,
-                'category': product.category,
+                'category': product.category.name if product.category else None,
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
                 'tax_rate': float(product.tax_rate),
@@ -687,7 +688,7 @@ class CustomerSearchView(BaseAPIView):
                 'address': customer.address
             })
         return JsonResponse({'data': data})
-    
+#region Product Management
 class ProductListView(BaseAPIView):
     def get(self, request):
         products = Product.objects.all()
@@ -696,7 +697,7 @@ class ProductListView(BaseAPIView):
             data.append({
                 'id': product.id,
                 'name': product.name,
-                'category': product.category,
+                'category': product.category.name if product.category else None,
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
                 'tax_rate': float(product.tax_rate),
@@ -737,7 +738,7 @@ class ProductCreateView(JWTAuthentication, BaseAPIView):
                 'data': {
                     'id': product.id,
                     'name': product.name,
-                    'category': product.category,
+                    'category': product.category.name if product.category else None,
                     'cost_price': float(product.cost_price),
                     'selling_price': float(product.selling_price),
                     'tax_rate': float(product.tax_rate),
@@ -803,7 +804,7 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
             'data': {
                 'id': product.id,
                 'name': product.name,
-                'category': product.category,
+                'category': product.category.name if product.category else None,
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
                 'tax_rate': float(product.tax_rate),
@@ -833,7 +834,7 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
                 'data': {
                     'id': product.id,
                     'name': product.name,
-                    'category': product.category,
+                    'category': product.category.name if product.category else None,
                     'cost_price': float(product.cost_price),
                     'selling_price': float(product.selling_price),
                     'tax_rate': float(product.tax_rate),
@@ -853,6 +854,13 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
             'data': {'active': product.active}
         })
 
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    authentication_classes = []
+    permission_classes = []
+
+#region Dashboard Stats
 class AdminDashboardStatsView(AdminRequiredMixin, BaseAPIView):
     def get(self, request):
         stats = {
