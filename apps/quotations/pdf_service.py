@@ -159,15 +159,25 @@ class QuotationPDFGenerator:
         tax_total = self._to_decimal(totals.get("tax_total", 0))
 
         subtotal_after_item_disc = subtotal - total_item_discount
-        overall_discount_percent = self._to_decimal(getattr(self.quotation, 'discount', 0))
-        overall_discount_amount = subtotal_after_item_disc * (overall_discount_percent / 100)
+        
+        overall_discount_value = self._to_decimal(getattr(self.quotation, 'discount', 0))
+        discount_label = 'Discount:'
+        overall_discount_amount = Decimal('0.00')
+
+        if overall_discount_value > 0:
+            if getattr(self.quotation, 'discount_type', 'PERCENTAGE') == 'amount':
+                overall_discount_amount = overall_discount_value
+                discount_label = 'Discount:'
+            else:
+                overall_discount_amount = subtotal_after_item_disc * (overall_discount_value / 100)
+                discount_label = f'Discount ({overall_discount_value}%):'
         
         grand_total = subtotal_after_item_disc - overall_discount_amount + tax_total
 
         totals_data = [
             ['Subtotal:', self._format_currency(subtotal)],
             ['Item Discounts:', f"- {self._format_currency(total_item_discount)}"],
-            ['Discount ({}%):'.format(overall_discount_percent), f"- {self._format_currency(overall_discount_amount)}"],
+            [discount_label, f"- {self._format_currency(overall_discount_amount)}"], # Use the dynamic label
             ['Tax Total:', self._format_currency(tax_total)],
             ['Total Amount:', self._format_currency(grand_total)],
         ]

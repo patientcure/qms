@@ -133,7 +133,7 @@ class Quotation(TimestampedModel):
     product = models.ManyToManyField(Product,blank=True)
     status = models.CharField(max_length=20, choices=QuotationStatus.choices, default=QuotationStatus.PENDING)
     follow_up_date = models.DateField(null=True, blank=True)
-
+    discount_type = models.CharField(max_length=20, choices=[('percentage', 'Percentage'), ('amount','Amount')], default='percentage', null=True, blank=True)
     currency = models.CharField(max_length=10, default='INR')
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     tax_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))

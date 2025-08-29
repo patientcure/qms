@@ -357,10 +357,14 @@ class QuotationCreateView(BaseAPIView):
 
         quotation.subtotal = subtotal.quantize(Decimal('0.01'))
         quotation.tax_total = tax_total.quantize(Decimal('0.01'))
-
         discount_amount = Decimal('0.00')
-        if quotation.discount:
-            discount_amount = (subtotal * quotation.discount / Decimal('100.00')).quantize(Decimal('0.01'))
+        if quotation.discount and quotation.discount > 0:
+            if quotation.discount_type == 'amount':
+                discount_amount = quotation.discount
+            else: 
+                discount_amount = (subtotal * quotation.discount / Decimal('100.00'))
+        
+        discount_amount = discount_amount.quantize(Decimal('0.01'))
 
         quotation.total = ((subtotal - discount_amount) + tax_total).quantize(Decimal('0.01'))
 
