@@ -179,7 +179,7 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
     def delete(self, request, user_id):
         salesperson = get_object_or_404(User, pk=user_id, role=Roles.SALESPERSON)
         salesperson.is_active = not salesperson.is_active
-        salesperson.save()
+        salesperson.save()  
         
         action = "activated" if salesperson.is_active else "deactivated"
         return JsonResponse({
@@ -193,21 +193,36 @@ class LeadListView(BaseAPIView):
         leads = Lead.objects.select_related('customer', 'assigned_to')
         data = []
         for lead in leads:
+            quotation = None
+            file_url = None
+            if lead.quotation_id:
+                try:
+                    quotation = Quotation.objects.get(pk=lead.quotation_id)
+                    file_url = quotation.file_url
+                except Quotation.DoesNotExist:
+                    file_url = None
+
             data.append({
                 'id': lead.id,
                 'status': lead.status,
-                'source':lead.lead_source,
+                'source': lead.lead_source,
                 'follow_up_date': lead.follow_up_date,
                 'notes': lead.notes,
+                'priority': lead.priority,
                 'customer': {
                     'id': lead.customer.id if lead.customer else None,
                     'name': lead.customer.name if lead.customer else None,
-                    'company_name': lead.customer.company_name if lead.customer else None
+                    'company_name': lead.customer.company_name if lead.customer else None,
+                    'phone': lead.customer.phone if lead.customer else None,
+                    'email': lead.customer.email if lead.customer else None,
+                    'primary_address': lead.customer.primary_address if lead.customer else None,
                 },
                 'assigned_to': {
                     'id': lead.assigned_to.id if lead.assigned_to else None,
+                    'name': lead.assigned_to.get_full_name() if lead.assigned_to else None,
                 },
                 'quotation': lead.quotation_id,
+                'file_url': file_url,
                 'created_at': lead.created_at,
                 'updated_at': lead.updated_at
             })

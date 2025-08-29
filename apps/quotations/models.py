@@ -142,7 +142,6 @@ class Quotation(TimestampedModel):
     emailed_at = models.DateTimeField(null=True, blank=True)
     lead_id = models.IntegerField(null=True, blank=True)
     has_pdf = models.BooleanField(default=False)
-    # Google Drivex
     file_url = models.URLField(blank=True)
 
     class Meta:
