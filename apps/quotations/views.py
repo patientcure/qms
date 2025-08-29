@@ -20,7 +20,7 @@ from .forms import (
     QuotationForm,
     CustomerForm, ProductForm
 )
-from .choices import ActivityAction
+from .choices import ActivityAction,QuotationStatus
 from .serializers import CategorySerializer
 from rest_framework import viewsets
 from django.http import JsonResponse
@@ -187,7 +187,7 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
             'message': f"Salesperson {salesperson.get_full_name()} {action} successfully",
             'data': {'is_active': salesperson.is_active}
         })
-
+#region Leads
 class LeadListView(BaseAPIView):
     def get(self, request):
         leads = Lead.objects.select_related('customer', 'assigned_to')
@@ -213,25 +213,86 @@ class LeadListView(BaseAPIView):
         return JsonResponse({'data': data})
 
 
-class LeadCreateView( BaseAPIView):
+
+class LeadCreateView(AdminRequiredMixin, BaseAPIView):
+    @transaction.atomic
     def post(self, request):
-        form_data = {**request.POST.dict(), **request.json}
-        form = LeadForm(form_data)
-        
-        if form.is_valid():
-            lead = form.save(commit=False)
-            lead.created_by = request.user
-            lead.save()
-            return JsonResponse({
-                'success': True,
-                'message': "Lead created successfully",
-                'data': {
+        try:
+            # 1. Pass all request data directly to your form.
+            # The form will handle validation and creating/finding the customer.
+            form = LeadForm(request.json)
+
+            if form.is_valid():
+                # form.save() will now return a lead instance with the
+                # correct customer already attached, thanks to your form's logic.
+                lead = form.save(commit=False)
+
+                # --- Perform logic that only the View should handle ---
+
+                # 2. Set the lead's creator from the request user.
+                lead.created_by = request.user
+
+                # 3. Auto-assign a salesperson if not provided.
+                if not lead.assigned_to:
+                    salesperson = Lead.get_least_loaded_salesperson()
+                    if salesperson:
+                        lead.assigned_to = salesperson
+
+                # 4. Create a corresponding empty quotation.
+                quotation = Quotation.objects.create(
+                    customer=lead.customer, # Use the customer from the validated lead
+                    assigned_to=lead.assigned_to,
+                    status=QuotationStatus.PENDING
+                )
+                lead.quotation_id = quotation.id
+
+                # 5. Save the objects to the database and finalize links.
+                lead.save()
+                quotation.lead_id = lead.id
+                quotation.save(update_fields=['lead_id'])
+
+                # 6. Log the activity.
+                ActivityLog.log(
+                    actor=request.user,
+                    action=ActivityAction.LEAD_CREATED,
+                    entity=lead,
+                    message="Created via API"
+                )
+
+                # 7. Prepare the detailed response.
+                response_data = {
                     'id': lead.id,
                     'status': lead.status,
+                    'priority': lead.priority,
+                    'customer': {
+                        'id': lead.customer.id,
+                        'name': lead.customer.name,
+                        'phone': lead.customer.phone,
+                    },
+                    'assigned_to': {
+                        'id': lead.assigned_to.id,
+                        'name': lead.assigned_to.get_full_name()
+                    } if lead.assigned_to else None,
+                    'quotation': {
+                        'id': quotation.id,
+                        'quotation_number': quotation.quotation_number,
+                        'lead_id': quotation.lead_id
+                    }
                 }
-            }, status=201)
-        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+                return JsonResponse({
+                    'success': True,
+                    'message': "Lead and corresponding quotation created successfully",
+                    'data': response_data
+                }, status=201)
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
+        except Exception as e:
+            import traceback
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }, status=500)
 
 class LeadDetailView(AdminRequiredMixin, BaseAPIView):
     def get(self, request, lead_id):
@@ -512,13 +573,13 @@ class CustomerListView(AdminRequiredMixin, BaseAPIView):
                 'email': customer.email,
                 'company_name': customer.company_name,
                 'phone': customer.phone,
-                'address': customer.address,
+                'address': customer.primary_address,
                 'created_at': customer.created_at
             })
         return JsonResponse({'data': data})
 
 
-class CustomerCreateView(AdminRequiredMixin, BaseAPIView):
+class CustomerCreateView( BaseAPIView):
 
     def _parse_request_data(self, request):
         if request.content_type == 'application/json':
@@ -544,13 +605,13 @@ class CustomerCreateView(AdminRequiredMixin, BaseAPIView):
                     'name': customer.name,
                     'email': customer.email,
                     'phone': customer.phone,
-                    'address': customer.address,
                     'company_name': customer.company_name,
                     'gst_number': customer.gst_number,
                     'title': customer.title,
                     'website': customer.website,
                     'primary_address': customer.primary_address,
                     'billing_address': customer.billing_address,
+                    'shipping_address': customer.shipping_address,
                 }
             }, status=201)
 
@@ -610,7 +671,6 @@ class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
                 'name': customer.name,
                 'email': customer.email,
                 'phone': customer.phone,
-                'address': customer.address,
                 'company_name': customer.company_name,
                 'created_at': customer.created_at,
                 'gst_number': customer.gst_number,

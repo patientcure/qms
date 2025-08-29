@@ -8,7 +8,7 @@ from apps.accounts.models import User,Roles
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
-        fields = ["id","name", "company_name", "email", "phone", "address", "gst_number","title","website","primary_address","billing_address","shipping_address"]
+        fields = ["id","name", "company_name", "email", "phone", "gst_number","title","website","primary_address","billing_address","shipping_address"]
 
 class ProductForm(forms.ModelForm):
     discount = forms.DecimalField(required=False, max_digits=10, decimal_places=2, initial=0)
@@ -91,7 +91,7 @@ class LeadForm(forms.ModelForm):
         fields = [
             'customer_name', 'customer_email', 'customer_phone', 'customer_company',
             'customer_primary_address', 'customer_billing_address', 'customer_shipping_address',
-            'status', 'source', 'follow_up_date', 'notes', 'assigned_to'
+            'status', 'lead_source', 'priority' ,'follow_up_date', 'notes', 'assigned_to'
         ]
         widgets = {
             'follow_up_date': forms.DateInput(attrs={'type': 'date'}),
@@ -116,66 +116,46 @@ class LeadForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        customer_data = {
-            'name': cleaned_data.get('customer_name'),
-            'email': cleaned_data.get('customer_email'),
-            'phone': cleaned_data.get('customer_phone'),
-            'company_name': cleaned_data.get('customer_company'),
-            'primary_address': cleaned_data.get('customer_primary_address'),
-            'billing_address': cleaned_data.get('customer_billing_address'),
-            'shipping_address': cleaned_data.get('customer_shipping_address'),
-        }
-        customer, _ = Customer.objects.update_or_create(
-            email=customer_data['phone'],
-            defaults=customer_data
-        )
 
-        cleaned_data['customer'] = customer
-        return cleaned_data
-
-    def save(self, commit=True):
-        lead = super().save(commit=False)
-        lead.customer = self.cleaned_data['customer']
-        if commit:
-            lead.save()
-        return lead
-
-
-    def clean(self):
-        cleaned_data = super().clean()
-        customer_email = cleaned_data.get('customer_email')
-        
+        customer_phone = cleaned_data.get('customer_phone')
+        if not customer_phone:
+            self.add_error('customer_phone', 'Customer phone is required.')
+            return cleaned_data
         customer, created = Customer.objects.get_or_create(
-            email=customer_email,
+            phone=customer_phone,
             defaults={
                 'name': cleaned_data.get('customer_name'),
-                'phone': cleaned_data.get('customer_phone'),
+                'email': cleaned_data.get('customer_email'),
                 'company_name': cleaned_data.get('customer_company'),
+                'primary_address': cleaned_data.get('customer_primary_address'),
+                'billing_address': cleaned_data.get('customer_billing_address'),
+                'shipping_address': cleaned_data.get('customer_shipping_address'),
             }
         )
-        
+
         if not created:
             update_fields = {}
-            if customer.name != cleaned_data.get('customer_name'):
-                update_fields['name'] = cleaned_data.get('customer_name')
-            if customer.phone != cleaned_data.get('customer_phone'):
-                update_fields['phone'] = cleaned_data.get('customer_phone')
-            if customer.company_name != cleaned_data.get('customer_company'):
-                update_fields['company_name'] = cleaned_data.get('customer_company')
-            
+            for field, value in {
+                'name': cleaned_data.get('customer_name'),
+                'email': cleaned_data.get('customer_email'),
+                'company_name': cleaned_data.get('customer_company'),
+                'primary_address': cleaned_data.get('customer_primary_address'),
+                'billing_address': cleaned_data.get('customer_billing_address'),
+                'shipping_address': cleaned_data.get('customer_shipping_address'),
+            }.items():
+                if getattr(customer, field) != value and value:
+                    update_fields[field] = value
+
             if update_fields:
                 Customer.objects.filter(pk=customer.pk).update(**update_fields)
                 customer.refresh_from_db()
-        
+
         cleaned_data['customer'] = customer
         return cleaned_data
 
     def save(self, commit=True):
         lead = super().save(commit=False)
         lead.customer = self.cleaned_data['customer']
-        
         if commit:
             lead.save()
         return lead
-    
-

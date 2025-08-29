@@ -3,18 +3,18 @@ from django.db import transaction
 from django.conf import settings
 import json
 import logging
-from .models import Product, TermsAndConditions, ActivityLog, Quotation
+from .models import Product, TermsAndConditions, ActivityLog, Quotation, Customer, Lead
 from .forms import QuotationForm
-from .choices import ActivityAction
+from .choices import ActivityAction, LeadStatus
 from .save_quotation import save_quotation_pdf
 from .views import BaseAPIView
 from .forms import CustomerForm
-from .models import Customer
 logger = logging.getLogger(__name__)
 from apps.accounts.models import User, Roles
 from django.db.models import Count
 from decimal import Decimal
 from .email_service import send_quotation_email
+
 class QuotationCreateView(BaseAPIView):
     @transaction.atomic
     def put(self, request):
@@ -73,23 +73,6 @@ class QuotationCreateView(BaseAPIView):
                 }, status=400)
 
             items_data = request_json.get('items', [])
-            if not items_data:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'At least one item is required'
-                }, status=400)
-            for i, item in enumerate(items_data):
-                if 'product' not in item:
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'Item {i} missing product field'
-                    }, status=400)
-                if 'quantity' not in item:
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'Item {i} missing quantity field'
-                    }, status=400)
-
             terms_data = request_json.get('terms', [])
             valid_term_ids = self._validate_terms(terms_data)
 
@@ -111,37 +94,67 @@ class QuotationCreateView(BaseAPIView):
                 )
                 if salesperson:
                     quotation.assigned_to = salesperson
+            
+            lead = None # Initialize lead variable
+            user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
+            if quotation.lead_id:
+                try:
+                    lead = Lead.objects.get(id=quotation.lead_id)
+                    lead.customer = customer
+                    lead.assigned_to = quotation.assigned_to
+                    lead.save(update_fields=['customer', 'assigned_to'])
+                except Lead.DoesNotExist:
+                    quotation.lead_id = None # Stale ID, will be recreated
+            
+            if not quotation.lead_id:
+                lead = Lead.objects.create(
+                    customer=customer,
+                    assigned_to=quotation.assigned_to,
+                    status=LeadStatus.PENDING,
+                    created_by=user,
+                    quotation_id=quotation.id
+                )
+                quotation.lead_id = lead.id
+
             super(Quotation, quotation).save()
             product_ids = [item.get('product') for item in items_data if item.get('product')]
             quotation.product.set(product_ids)
 
-            # Recalculate totals based on the incoming items data.
             self._recalculate_totals_from_items(quotation, items_data)
 
             if valid_term_ids:
                 quotation.terms.set(valid_term_ids)
 
-            if hasattr(request, 'user') and request.user.is_authenticated:
+            if user:
                 ActivityLog.log(
-                    actor=request.user,
+                    actor=user,
                     action=ActivityAction.QUOTATION_UPDATED,
                     entity=quotation,
                     message="Updated via API"
                 )
 
+            # --- Conditional PDF Generation ---
             pdf_url = None
-            try:
-                pdf_path, pdf_url = save_quotation_pdf(quotation, request, items_data=items_data, terms=valid_term_ids)
-                quotation.file_url = pdf_url
-                quotation.save(update_fields=['file_url'])
-            except Exception as e:
-                logger.error(f"PDF generation failed: {str(e)}")
+            if items_data:
+                try:
+                    pdf_path, pdf_url = save_quotation_pdf(quotation, request, items_data=items_data, terms=valid_term_ids)
+                    quotation.file_url = pdf_url
+                    quotation.has_pdf = True
+                except Exception as e:
+                    logger.error(f"PDF generation failed: {str(e)}")
+                    quotation.has_pdf = False
+            else:
+                quotation.file_url = ''
+                quotation.has_pdf = False
+            
+            quotation.save(update_fields=['file_url', 'has_pdf', 'lead_id'])
 
             if send_immediately:
                 quotation.refresh_from_db()
                 send_quotation_email(quotation)
 
-            quotation_data = self._get_quotation_response_data(quotation, items_data, valid_term_ids)
+            # CORRECTED LINE
+            quotation_data = self._get_quotation_response_data(quotation, lead, items_data, valid_term_ids)
             quotation_data['pdf_url'] = pdf_url
 
             return JsonResponse({
@@ -196,13 +209,6 @@ class QuotationCreateView(BaseAPIView):
                 return JsonResponse({'success': False, 'error': f'Missing required fields: {missing_fields}'}, status=400)
 
             items_data = request_json.get('items', [])
-            if not items_data:
-                return JsonResponse({'success': False, 'error': 'At least one item is required'}, status=400)
-
-            for i, item in enumerate(items_data):
-                if 'product' not in item or 'quantity' not in item:
-                    return JsonResponse({'success': False, 'error': f'Item {i} is missing product or quantity'}, status=400)
-
             terms_data = request_json.get('terms', [])
             valid_term_ids = self._validate_terms(terms_data)
 
@@ -229,7 +235,19 @@ class QuotationCreateView(BaseAPIView):
                 if salesperson:
                     quotation.assigned_to = salesperson
 
-            super(Quotation, quotation).save()
+            super(Quotation, quotation).save() # Initial save to get an ID
+
+            # --- Lead Creation ---
+            user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
+            lead = Lead.objects.create(
+                customer=customer,
+                assigned_to=quotation.assigned_to,
+                status=LeadStatus.PENDING,
+                created_by=user,
+                quotation_id=quotation.id
+            )
+            quotation.lead_id = lead.id
+
             product_ids = [item.get('product') for item in items_data if item.get('product')]
             quotation.product.set(product_ids)
             self._recalculate_totals_from_items(quotation, items_data)
@@ -237,27 +255,35 @@ class QuotationCreateView(BaseAPIView):
             if valid_term_ids:
                 quotation.terms.set(valid_term_ids)
 
-            if hasattr(request, 'user') and request.user.is_authenticated:
+            if user:
                 ActivityLog.log(
-                    actor=request.user,
+                    actor=user,
                     action=ActivityAction.QUOTATION_CREATED,
                     entity=quotation,
                     message="Created via API"
                 )
 
+            # --- Conditional PDF Generation ---
             pdf_url = None
-            try:
-                pdf_path, pdf_url = save_quotation_pdf(quotation, request, items_data=items_data, terms=valid_term_ids)
-                quotation.file_url = pdf_url
-                quotation.save(update_fields=['file_url'])
-            except Exception as e:
-                logger.error(f"PDF generation failed: {str(e)}")
+            if items_data:
+                try:
+                    pdf_path, pdf_url = save_quotation_pdf(quotation, request, items_data=items_data, terms=valid_term_ids)
+                    quotation.file_url = pdf_url
+                    quotation.has_pdf = True
+                except Exception as e:
+                    logger.error(f"PDF generation failed: {str(e)}")
+                    quotation.has_pdf = False
+            else:
+                quotation.has_pdf = False
+
+            quotation.save(update_fields=['lead_id', 'file_url', 'has_pdf'])
 
             if send_immediately:
                 quotation.refresh_from_db()
                 send_quotation_email(quotation)
 
-            quotation_data = self._get_quotation_response_data(quotation, items_data, valid_term_ids)
+            # CORRECTED LINE
+            quotation_data = self._get_quotation_response_data(quotation, lead, items_data, valid_term_ids)
             quotation_data['pdf_url'] = pdf_url
 
             return JsonResponse({
@@ -289,6 +315,13 @@ class QuotationCreateView(BaseAPIView):
             return []
 
     def _recalculate_totals_from_items(self, quotation, items_data):
+        if not items_data:
+            quotation.subtotal = Decimal('0.00')
+            quotation.tax_total = Decimal('0.00')
+            quotation.total = Decimal('0.00')
+            quotation.save(update_fields=['subtotal', 'tax_total', 'total'])
+            return
+
         product_ids = [item.get('product') for item in items_data if item.get('product')]
         products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
 
@@ -309,7 +342,6 @@ class QuotationCreateView(BaseAPIView):
                 else product.selling_price
             )
 
-            # Use tax rate from request JSON if available, else from Product model
             tax_rate_from_request = item.get('tax_rate')
             tax_rate = (
                 Decimal(str(tax_rate_from_request))
@@ -332,14 +364,13 @@ class QuotationCreateView(BaseAPIView):
 
         quotation.total = ((subtotal - discount_amount) + tax_total).quantize(Decimal('0.01'))
 
-        # Save the calculated totals to the database.
         quotation.save(update_fields=['subtotal', 'tax_total', 'total'])
 
     def _handle_validation_errors(self, form):
         errors = {'form': form.errors}
         return JsonResponse({'success': False, 'errors': errors}, status=400)
 
-    def _get_quotation_response_data(self, quotation, items_data, term_ids=None):
+    def _get_quotation_response_data(self, quotation, lead, items_data, term_ids=None):
         try:
             product_ids = [item.get('product') for item in items_data if item.get('product')]
             products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
@@ -352,7 +383,6 @@ class QuotationCreateView(BaseAPIView):
 
                 quantity = Decimal(str(item_data.get('quantity', 1)))
 
-                # Use price from request JSON if available, else from Product model
                 unit_price_from_request = item_data.get('unit_price')
                 unit_price = (
                     Decimal(str(unit_price_from_request))
@@ -360,7 +390,6 @@ class QuotationCreateView(BaseAPIView):
                     else product.selling_price
                 )
 
-                # Use tax rate from request JSON if available, else from Product model
                 tax_rate_from_request = item_data.get('tax_rate')
                 tax_rate = (
                     Decimal(str(tax_rate_from_request))
@@ -401,6 +430,14 @@ class QuotationCreateView(BaseAPIView):
                     'id': quotation.assigned_to.id,
                     'name': quotation.assigned_to.get_full_name()
                 } if quotation.assigned_to else None,
+                'lead': {
+                    'id': lead.id,
+                    'status': lead.status,
+                    'priority': lead.priority,
+                    'follow_up_date': lead.follow_up_date,
+                    'quotation_id': lead.quotation_id,
+                    'notes': lead.notes
+                } if lead else None,
                 'follow_up_date': quotation.follow_up_date,
                 'created_at': quotation.created_at,
                 'items': items,

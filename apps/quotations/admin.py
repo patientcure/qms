@@ -47,3 +47,4 @@ class ActivityLogAdmin(admin.ModelAdmin):
     list_display = ('action', 'entity_type', 'entity_id', 'actor', 'created_at')
     list_filter = ('action', 'entity_type')
     search_fields = ('message',)
+

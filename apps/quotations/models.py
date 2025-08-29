@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
-from .choices import LeadStatus, QuotationStatus, ActivityAction,CATEGORY_CHOICES,UNIT_CHOICES
+from .choices import LeadStatus, QuotationStatus, ActivityAction,CATEGORY_CHOICES,UNIT_CHOICES,LeadPriority,LeadSource
 from apps.quotations.utils import generate_next_quotation_number
 User = settings.AUTH_USER_MODEL
 
@@ -34,8 +34,7 @@ class Customer(TimestampedModel):
     shipping_address = models.CharField(max_length=255, blank=True)
     company_name = models.CharField(max_length=255, blank=True)
     email = models.EmailField(blank=True)
-    phone = models.CharField(max_length=50, blank=True,unique=True)
-    address = models.TextField(blank=True)
+    phone = models.CharField(max_length=50)
     gst_number = models.CharField(max_length=30, blank=True)
 
     class Meta:
@@ -101,11 +100,12 @@ class Lead(TimestampedModel):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='leads')
     assigned_to = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='leads')
     status = models.CharField(max_length=20, choices=LeadStatus.choices, default=LeadStatus.PENDING)
-    source = models.CharField(max_length=255, blank=True)
+    lead_source = models.CharField(max_length=20, choices= LeadSource.choices, null=True, blank=True)
+    priority = models.CharField(max_length=20, choices= LeadPriority.choices, default=LeadPriority.MEDIUM)
     follow_up_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='leads_created')
-
+    quotation_id = models.IntegerField(null=True, blank=True)
     class Meta:
         indexes = [
             models.Index(fields=['status']),
@@ -140,8 +140,9 @@ class Quotation(TimestampedModel):
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'),blank=True,null=True)
     emailed_at = models.DateTimeField(null=True, blank=True)
-
-    # Google Drive
+    lead_id = models.IntegerField(null=True, blank=True)
+    has_pdf = models.BooleanField(default=False)
+    # Google Drivex
     file_url = models.URLField(blank=True)
 
     class Meta:

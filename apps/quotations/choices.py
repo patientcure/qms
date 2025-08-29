@@ -2,12 +2,32 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 
+class LeadPriority(models.TextChoices):
+    LOW = 'LOW', _('Low')
+    MEDIUM = 'MEDIUM', _('Medium')
+    HIGH = 'HIGH', _('High')
+
+class LeadSource(models.TextChoices):
+    WEBSITE = 'WEBSITE', _('Website')
+    REFERRAL = 'REFERRAL', _('Referral')
+    SOCIALMEDIA = 'SOCIAL_MEDIA', _('Social Media')
+    EMAIL = 'EMAIL', _('Email Campaign')
+    COLD_CALL = 'COLD_CALL', _('Cold Call')
+    EXHIBITION = 'EXHIBITION', _('Exhibition/Trade Show')
+    EXISTING_CUSTOMER = 'EXISTING_CUSTOMER', _('Existing Customer')
+    OTHER = 'OTHER', _('Other')
+    QUOTATION = 'QUOTATION', _('Quotation')
+
 class LeadStatus(models.TextChoices):
     PENDING = 'PENDING', _('Pending')
     IN_PROGRESS = 'IN_PROGRESS', _('In Progress')
     CONVERTED = 'CONVERTED', _('Converted')
     LOST = 'LOST', _('Lost')
     ON_HOLD = 'ON_HOLD', _('On Hold')
+    NEW = 'NEW', _('New')
+    QUALIFIED = 'QUALIFIED', _('Qualified')
+    PROPOSAL = 'PROPOSAL', _('Proposal Sent')
+    PRIORITY = 'PRIORITY', _('Priority')
 
 class QuotationStatus(models.TextChoices):
     DRAFT = 'DRAFT', 'Draft'
