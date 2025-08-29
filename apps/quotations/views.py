@@ -196,7 +196,7 @@ class LeadListView(BaseAPIView):
             data.append({
                 'id': lead.id,
                 'status': lead.status,
-                'source':lead.source,
+                'source':lead.lead_source,
                 'follow_up_date': lead.follow_up_date,
                 'notes': lead.notes,
                 'customer': {
@@ -207,6 +207,7 @@ class LeadListView(BaseAPIView):
                 'assigned_to': {
                     'id': lead.assigned_to.id if lead.assigned_to else None,
                 },
+                'quotation': lead.quotation_id,
                 'created_at': lead.created_at,
                 'updated_at': lead.updated_at
             })
@@ -231,8 +232,6 @@ class LeadCreateView(AdminRequiredMixin, BaseAPIView):
 
                 # 2. Set the lead's creator from the request user.
                 lead.created_by = request.user
-
-                # 3. Auto-assign a salesperson if not provided.
                 if not lead.assigned_to:
                     salesperson = Lead.get_least_loaded_salesperson()
                     if salesperson:
@@ -301,7 +300,7 @@ class LeadDetailView(AdminRequiredMixin, BaseAPIView):
             'data': {
                 'id': lead.id,
                 'status': lead.status,
-                'source':lead.source,
+                'source':lead.lead_source,
                 'follow_up_date': lead.follow_up_date,
                 'notes': lead.notes,
                 'customer': {
@@ -745,7 +744,7 @@ class CustomerSearchView(BaseAPIView):
                 'email': customer.email,
                 'company_name': customer.company_name,
                 'phone': customer.phone,
-                'address': customer.address
+                'address': customer.primary_address
             })
         return JsonResponse({'data': data})
 #region Product Management

@@ -94,7 +94,7 @@ class QuotationPDFGenerator:
             if customer.phone: customer_info += f"<b>Phone:</b> {customer.phone}<br/>"
             if customer.company_name: customer_info += f"<b>Company:</b> {customer.company_name}<br/>"
             if customer.gst_number: customer_info += f"<b>GST:</b> {customer.gst_number}<br/>"
-            if customer.address: customer_info += f"<b>Address:</b> {customer.address}"
+            if customer.primary_address : customer_info += f"<b>Address:</b> {customer.primary_address}"
         customer_table = Table([[Paragraph(customer_info, self.normal_style)]], colWidths=[170 * mm])
         customer_table.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), self.light_gray), ('GRID', (0,0), (-1,-1), 0.5, self.border_gray), ('PADDING', (0,0), (-1,-1), 12)]))
         elements.append(customer_table)

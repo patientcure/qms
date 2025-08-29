@@ -415,7 +415,6 @@ class QuotationCreateView(BaseAPIView):
                 'id': quotation.id,
                 'quotation_number': quotation.quotation_number,
                 'status': quotation.status,
-                'subtotal': float(quotation.subtotal),
                 'tax_total': float(quotation.tax_total),
                 'total': float(quotation.total),
                 'discount': float(quotation.discount) if quotation.discount else 0.0,

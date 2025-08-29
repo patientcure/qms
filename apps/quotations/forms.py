@@ -19,26 +19,13 @@ class ProductForm(forms.ModelForm):
             "selling_price", "tax_rate", "unit", "weight", 
             "dimensions", "warranty_months", "brand", "is_available", "active"
         ]
-# class QuotationItemForm(forms.ModelForm):
-#     class Meta:
-#         model = QuotationItem
-#         fields = ["product", "description", "quantity", "unit_price", "tax_rate"]
-
-# QuotationItemFormSet = forms.inlineformset_factory(
-#     Quotation,
-#     QuotationItem,
-#     form=QuotationItemForm,
-#     extra=1,
-#     can_delete=True,
-# )
-
 class QuotationForm(forms.ModelForm):
     discount_type = forms.CharField(required=False)
     class Meta:
         model = Quotation
         fields = [
             'customer', 'assigned_to', 'terms', 'email_template', 'discount',
-            'follow_up_date','status'
+            'follow_up_date','status','discount_type'
         ]
     
     def __init__(self, *args, **kwargs):
