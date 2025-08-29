@@ -7,6 +7,7 @@ from decimal import Decimal
 import logging
 from .models import CompanyProfile, Product
 from .pdf_service import QuotationPDFGenerator
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,8 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
             terms=terms
         )
         pdf_content = generator.generate()
-        file_name = f'quotation_{quotation.quotation_number}.pdf'
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        file_name = f'quotation_{quotation.quotation_number}_{timestamp}.pdf'
         file_path = os.path.join('quotations', file_name)
         if default_storage.exists(file_path):
             default_storage.delete(file_path)

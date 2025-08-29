@@ -325,7 +325,9 @@ class QuotationCreateView(BaseAPIView):
         product_ids = [item.get('product') for item in items_data if item.get('product')]
         products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
 
-        subtotal = Decimal('0.00')
+        # Initialize variables to hold gross subtotal, total item discounts, and tax
+        gross_subtotal = Decimal('0.00')
+        total_item_discount = Decimal('0.00')
         tax_total = Decimal('0.00')
 
         for item in items_data:
@@ -334,39 +336,49 @@ class QuotationCreateView(BaseAPIView):
                 continue
 
             quantity = Decimal(str(item.get('quantity', 1)))
-
-            unit_price_from_request = item.get('unit_price')
             unit_price = (
-                Decimal(str(unit_price_from_request))
-                if unit_price_from_request is not None
+                Decimal(str(item.get('unit_price')))
+                if item.get('unit_price') is not None
                 else product.selling_price
             )
-
-            tax_rate_from_request = item.get('tax_rate')
             tax_rate = (
-                Decimal(str(tax_rate_from_request))
-                if tax_rate_from_request is not None
+                Decimal(str(item.get('tax_rate')))
+                if item.get('tax_rate') is not None
                 else product.tax_rate
             )
+            # Get item-specific discount percentage
+            item_discount_percent = Decimal(str(item.get('discount', 0)))
 
-            line_total = quantity * unit_price
-            line_tax = line_total * (tax_rate / Decimal('100.00'))
+            # Calculations now mirror the PDF logic precisely
+            line_gross_total = quantity * unit_price
+            item_discount_amount = line_gross_total * (item_discount_percent / 100)
+            line_net_total = line_gross_total - item_discount_amount
+            line_tax = line_net_total * (tax_rate / 100)
 
-            subtotal += line_total
+            # Aggregate the totals
+            gross_subtotal += line_gross_total
+            total_item_discount += item_discount_amount
             tax_total += line_tax
 
-        quotation.subtotal = subtotal.quantize(Decimal('0.01'))
-        quotation.tax_total = tax_total.quantize(Decimal('0.01'))
-        discount_amount = Decimal('0.00')
+        # Subtotal after item-level discounts are applied
+        subtotal_after_item_disc = gross_subtotal - total_item_discount
+
+        # Calculate the overall quotation-level discount
+        overall_discount_amount = Decimal('0.00')
         if quotation.discount and quotation.discount > 0:
             if quotation.discount_type == 'amount':
-                discount_amount = quotation.discount
-            else: 
-                discount_amount = (subtotal * quotation.discount / Decimal('100.00'))
-        
-        discount_amount = discount_amount.quantize(Decimal('0.01'))
+                overall_discount_amount = quotation.discount
+            else: # 'percentage'
+                # The base for the percentage is now the subtotal *after* item discounts
+                overall_discount_amount = (subtotal_after_item_disc * quotation.discount / Decimal('100.00'))
 
-        quotation.total = ((subtotal - discount_amount) + tax_total).quantize(Decimal('0.01'))
+        # Calculate the final grand total
+        final_total = (subtotal_after_item_disc - overall_discount_amount + tax_total)
+
+
+        quotation.subtotal = gross_subtotal.quantize(Decimal('0.01'))
+        quotation.tax_total = tax_total.quantize(Decimal('0.01'))
+        quotation.total = final_total.quantize(Decimal('0.01'))
 
         quotation.save(update_fields=['subtotal', 'tax_total', 'total'])
 
