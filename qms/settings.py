@@ -19,7 +19,7 @@ from datetime import timedelta
 from django.conf.urls.static import static
 import dj_database_url
 
-
+load_dotenv()
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1200),  # change from 5m to 30m
@@ -28,10 +28,7 @@ SIMPLE_JWT = {
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "*"
-]
+    "https://qms-2h5c.onrender.com"]
 
 
 # Quick-start development settings - unsuitable for production
@@ -133,11 +130,10 @@ USE_TZ = True
 #     }
 # }
 
-db_config = dj_database_url.parse(os.getenv('DATABASE_URL'))
-db_config['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
 DATABASES = {
-    'default': db_config
+    "default": dj_database_url.parse(os.getenv("DATABASE_URL"), engine="django.db.backends.postgresql")
 }
+
 
 
 # Password validation
