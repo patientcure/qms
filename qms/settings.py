@@ -28,7 +28,13 @@ SIMPLE_JWT = {
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 CORS_ALLOWED_ORIGINS = [
-    "https://qms-2h5c.onrender.com"]
+    "http://127.0.0.1:8000", 
+    "http://localhost:8000",
+    "http://localhost:5173",
+    "https://*.devtunnels.ms", 
+    "https://qms-2h5c.onrender.com"
+]
+
 
 
 # Quick-start development settings - unsuitable for production
@@ -60,9 +66,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
