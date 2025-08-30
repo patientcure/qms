@@ -866,15 +866,12 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
                 'id': product.id,
                 'name': product.name,
                 'category': product.category.name if product.category else None,
-                'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
                 'tax_rate': float(product.tax_rate),
-                'profit_margin': float(product.profit_margin),
                 'unit': product.unit,
                 'description': product.description,
                 'weight': float(product.weight) if product.weight else None,
                 'dimensions': product.dimensions,
-                'warranty_months': product.warranty_months,
                 'brand': product.brand,
                 'is_available': product.is_available,
                 'active': product.active,
@@ -896,10 +893,8 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
                     'id': product.id,
                     'name': product.name,
                     'category': product.category.name if product.category else None,
-                    'cost_price': float(product.cost_price),
                     'selling_price': float(product.selling_price),
                     'tax_rate': float(product.tax_rate),
-                    'profit_margin': float(product.profit_margin),
                     'unit': product.unit
                 }
             })
