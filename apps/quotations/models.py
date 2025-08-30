@@ -66,6 +66,7 @@ class Product(models.Model):
     warranty_months = models.IntegerField(null=True, blank=True)
     brand = models.CharField(max_length=100, blank=True)
     is_available = models.BooleanField(default=True)
+    discount = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)  # %
     active = models.BooleanField(default=True,null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 

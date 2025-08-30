@@ -1,27 +1,35 @@
-
 import os
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from decimal import Decimal
 import logging
+from datetime import datetime
+
+# Import your actual models and PDF generation service
 from .models import CompanyProfile, Product
 from .pdf_service import QuotationPDFGenerator
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 def save_quotation_pdf(quotation, request, items_data, terms=None):
+    """
+    Generates a PDF for a quotation and saves it to the configured
+    default_storage backend (e.g., Firebase Storage).
+    Returns the storage path and the public Firebase URL.
+    """
     try:
         product_ids = [item.get('product') for item in items_data if item.get('product')]
         products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
         
         enriched_items = []
         for item in items_data:
-            product = products.get(item.get('product'))
+            # Ensure product ID is an integer for dictionary lookup
+            product = products.get(int(item.get('product'))) 
             if not product:
                 logger.warning(f"Product ID {item.get('product')} not found for quotation {quotation.id}")
                 continue
+                
             unit_price = item.get('unit_price') or product.selling_price
             tax_rate = item.get('tax_rate') or product.tax_rate
             
@@ -34,30 +42,45 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
                 'discount': item.get('discount', 0)
             }
             enriched_items.append(enriched_item)
+            
         company_profile = CompanyProfile.objects.first()
+        if not company_profile:
+            logger.error("No CompanyProfile found in the database. PDF cannot be generated.")
+            raise Exception("Company Profile is not configured in the system.")
+
+        # --- PDF Generation ---
         generator = QuotationPDFGenerator(
             quotation=quotation,
-            items_data=enriched_items,  # <-- Pass the corrected item data
+            items_data=enriched_items,
             company_profile=company_profile,
             terms=terms
         )
         pdf_content = generator.generate()
+
+        # --- Saving to default storage (which is now Firebase Storage) ---
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         file_name = f'quotation_{quotation.quotation_number}_{timestamp}.pdf'
-        file_path = os.path.join('quotations', file_name)
-        if default_storage.exists(file_path):
-            default_storage.delete(file_path)
         
+        # The path will be created inside your Firebase Storage bucket
+        file_path = os.path.join('quotations', file_name)
+        
+        # default_storage.save() handles the upload to Firebase
         saved_path = default_storage.save(file_path, ContentFile(pdf_content))
         
-        if request:
-            pdf_url = request.build_absolute_uri(default_storage.url(saved_path))
-        else:
-            pdf_url = default_storage.url(saved_path)
+        # default_storage.url() retrieves the public, web-accessible URL from Firebase.
+        # This is the actual URL for browser access.
+        pdf_url = default_storage.url(saved_path)
 
-        logger.info(f"Successfully generated PDF for quotation {quotation.id} at {pdf_url}")
+        logger.info(f"Successfully uploaded PDF for quotation {quotation.id}. URL: {pdf_url}")
+        
+        # Return the path within the bucket and the full public URL
         return saved_path, pdf_url
         
+    except Product.DoesNotExist:
+        logger.error(f"A product listed in the quotation's items does not exist.")
+        raise Exception("One or more products in the quotation could not be found.")
     except Exception as e:
-        logger.error(f"Error generating PDF for quotation {quotation.id}", exc_info=True)
-        raise Exception(f"Failed to generate PDF: {str(e)}")
+        logger.error(f"An unexpected error occurred while generating PDF for quotation {quotation.id}: {e}", exc_info=True)
+        # Re-raise the exception to be handled by the calling view
+        raise
+

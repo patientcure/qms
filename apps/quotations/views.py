@@ -342,7 +342,6 @@ class LeadDetailView(AdminRequiredMixin, BaseAPIView):
                 'message': "Lead updated successfully",
                 'data': {
                     'id': lead.id,
-                    'title': lead.title,
                     'status': lead.status,
                     'priority': lead.priority
                 }
@@ -397,6 +396,8 @@ class QuotationListView(BaseAPIView):
                 'quotation_number': quotation.quotation_number,
                 'status': quotation.status,
                 'url': quotation.file_url,
+                'discount': float(quotation.discount) if quotation.discount else 0.0,
+                'discount_type': quotation.discount_type,
                 'subtotal': float(quotation.subtotal),
                 'tax_total': float(quotation.tax_total),
                 'total': float(quotation.total),
@@ -418,10 +419,10 @@ class QuotationListView(BaseAPIView):
                 'products':[
                     {
                         'id': item.id,
-                        'cost_price': item.cost_price,
+                        'selling_price': item.selling_price,
                         'description': item.description,
                         'tax_rate': float(item.tax_rate),
-                        'name' : item.name if item.name else None
+                        'name' : item.name if item.name else None,
                     } for item in quotation.product.all()
                 ],
                 'created_at': quotation.created_at,
@@ -465,19 +466,6 @@ class QuotationDetailView(JWTAuthMixin, BaseAPIView):  # FIXED: Changed from Log
         if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
             return JsonResponse({'error': 'Permission denied'}, status=403)
         
-        items = []
-        for item in quotation.items.select_related('product'):
-            items.append({
-                'id': item.id,
-                'quantity': float(item.quantity),
-                'unit_price': float(item.unit_price),
-                'tax_rate': float(item.tax_rate),
-                'description': item.description,
-                'product': {
-                    'id': item.product.id if item.product else None,
-                    'name': item.product.name if item.product else None
-                }
-            })
         
         return JsonResponse({
             'data': {
@@ -489,19 +477,18 @@ class QuotationDetailView(JWTAuthMixin, BaseAPIView):  # FIXED: Changed from Log
                 'total': float(quotation.total),
                 'customer': {
                     'id': quotation.customer.id,
-                    'name': quotation.customer.name
+                    'name': quotation.customer.name,
+                    'email': quotation.customer.email,
+                    'phone': quotation.customer.phone,
+                    'primary_address': quotation.customer.primary_address,
+                    'company_name': quotation.customer.company_name
                 },
                 'assigned_to': {
                     'id': quotation.assigned_to.id if quotation.assigned_to else None,
                     'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
                 },
-                'terms': {
-                    'id': quotation.terms.id if quotation.terms else None
-                },
                 'created_at': quotation.created_at,
                 'emailed_at': quotation.emailed_at,
-                'follow_up_date': quotation.follow_up_date,
-                'items': items
             }
         })
 

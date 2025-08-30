@@ -9,10 +9,12 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+import os
+from firebase_admin import credentials
+import firebase_admin
 from pathlib import Path
 from dotenv import load_dotenv
-import os
+import json
 from datetime import timedelta
 from django.conf.urls.static import static
 
@@ -99,8 +101,13 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
-SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'shhopsmartt@gmail.com'
+EMAIL_HOST_PASSWORD = 'your_app_password'
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'shhopsmartt@gmail.com')
 
 # Google Drive
 GOOGLE_DRIVE_CREDENTIALS_FILE = os.getenv('GOOGLE_DRIVE_CREDENTIALS_FILE', 'service-account.json')
@@ -160,3 +167,36 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+firebase_credentials_json = os.getenv('FIREBASE_CREDENTIALS_JSON')
+firebase_credentials = None
+if firebase_credentials_json:
+    try:
+        firebase_credentials = json.loads(firebase_credentials_json)
+    except json.JSONDecodeError:
+        print("Error: Could not decode FIREBASE_CREDENTIALS_JSON. Check your .env file.")
+else:
+    print("Warning: FIREBASE_CREDENTIALS_JSON environment variable not found.")
+
+# 2. Initialize Firebase Admin SDK if credentials were loaded
+if firebase_credentials:
+    try:
+        cred = credentials.Certificate(firebase_credentials)
+        firebase_admin.initialize_app(cred, {
+            'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET')
+        })
+        print("Firebase Admin SDK initialized successfully from a single environment variable.")
+    except Exception as e:
+        # Avoid crashing if the app is already initialized (e.g., in some testing scenarios)
+        if 'already exists' not in str(e):
+             print(f"Error initializing Firebase Admin SDK: {e}")
+
+# 3. Configure django-storages to use Google Cloud Storage
+DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+
+# 4. Set Google Cloud Storage settings
+GS_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', firebase_credentials.get('project_id') if firebase_credentials else None)
+GS_BUCKET_NAME = os.getenv('FIREBASE_STORAGE_BUCKET')
+
+# django-storages will automatically use the initialized Firebase Admin credentials
+GS_DEFAULT_ACL = 'publicRead'
