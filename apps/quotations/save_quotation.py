@@ -44,9 +44,9 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
             enriched_items.append(enriched_item)
             
         company_profile = CompanyProfile.objects.first()
-        if not company_profile:
-            logger.error("No CompanyProfile found in the database. PDF cannot be generated.")
-            raise Exception("Company Profile is not configured in the system.")
+        # if not company_profile:
+        #     logger.error("No CompanyProfile found in the database. PDF cannot be generated.")
+        #     raise Exception("Company Profile is not configured in the system.")
 
         # --- PDF Generation ---
         generator = QuotationPDFGenerator(
