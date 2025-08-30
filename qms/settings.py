@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 import json
 from datetime import timedelta
 from django.conf.urls.static import static
+import dj_database_url
+
 
 
 SIMPLE_JWT = {
@@ -28,6 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "*"
 ]
 
 
@@ -123,11 +126,17 @@ USE_TZ = True
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
+db_config = dj_database_url.parse(os.getenv('DATABASE_URL'))
+db_config['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': db_config
 }
 
 

@@ -8,6 +8,7 @@ cffi==1.17.1
 charset-normalizer==3.4.3
 cryptography==45.0.6
 cssselect2==0.8.0
+dj-database-url==3.0.1
 Django==5.2.5
 django-cors-headers==4.7.0
 django-storages==1.14.6
@@ -30,6 +31,7 @@ google-resumable-media==2.7.2
 googleapis-common-protos==1.70.0
 grpcio==1.74.0
 grpcio-status==1.74.0
+gunicorn==23.0.0
 h11==0.16.0
 h2==4.3.0
 hpack==4.1.0
@@ -41,6 +43,7 @@ idna==3.10
 MarkupSafe==3.0.2
 msgpack==1.1.1
 oauthlib==3.3.1
+packaging==25.0
 pillow==11.3.0
 proto-plus==1.26.1
 protobuf==6.32.0
