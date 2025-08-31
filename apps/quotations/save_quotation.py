@@ -1,21 +1,18 @@
 import os
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
 from decimal import Decimal
 import logging
 from datetime import datetime
-
-# Import your actual models and PDF generation service
 from .models import CompanyProfile, Product
 from .pdf_service import QuotationPDFGenerator
+from storages.backends.gcloud import GoogleCloudStorage
 
 logger = logging.getLogger(__name__)
 
 def save_quotation_pdf(quotation, request, items_data, terms=None):
     """
-    Generates a PDF for a quotation and saves it to the configured
-    default_storage backend (e.g., Firebase Storage).
+    Generates a PDF for a quotation and saves it explicitly to Firebase Storage.
     Returns the storage path and the public Firebase URL.
     """
     try:
@@ -24,7 +21,6 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
         
         enriched_items = []
         for item in items_data:
-            # Ensure product ID is an integer for dictionary lookup
             product = products.get(int(item.get('product'))) 
             if not product:
                 logger.warning(f"Product ID {item.get('product')} not found for quotation {quotation.id}")
@@ -44,9 +40,6 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
             enriched_items.append(enriched_item)
             
         company_profile = CompanyProfile.objects.first()
-        # if not company_profile:
-        #     logger.error("No CompanyProfile found in the database. PDF cannot be generated.")
-        #     raise Exception("Company Profile is not configured in the system.")
 
         # --- PDF Generation ---
         generator = QuotationPDFGenerator(
@@ -57,23 +50,20 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
         )
         pdf_content = generator.generate()
 
-        # --- Saving to default storage (which is now Firebase Storage) ---
+        # --- Saving to explicit storage ---
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         file_name = f'quotation_{quotation.quotation_number}_{timestamp}.pdf'
-        
-        # The path will be created inside your Firebase Storage bucket
         file_path = os.path.join('quotations', file_name)
         
-        # default_storage.save() handles the upload to Firebase
-        saved_path = default_storage.save(file_path, ContentFile(pdf_content))
-        
-        # default_storage.url() retrieves the public, web-accessible URL from Firebase.
-        # This is the actual URL for browser access.
-        pdf_url = default_storage.url(saved_path)
+        # --- 2. CREATE AN EXPLICIT INSTANCE OF THE STORAGE BACKEND ---
+        gcs_storage = GoogleCloudStorage()
+
+        # --- 3. USE THE EXPLICIT INSTANCE INSTEAD OF default_storage ---
+        saved_path = gcs_storage.save(file_path, ContentFile(pdf_content))
+        pdf_url = gcs_storage.url(saved_path)
 
         logger.info(f"Successfully uploaded PDF for quotation {quotation.id}. URL: {pdf_url}")
         
-        # Return the path within the bucket and the full public URL
         return saved_path, pdf_url
         
     except Product.DoesNotExist:
@@ -81,6 +71,4 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
         raise Exception("One or more products in the quotation could not be found.")
     except Exception as e:
         logger.error(f"An unexpected error occurred while generating PDF for quotation {quotation.id}: {e}", exc_info=True)
-        # Re-raise the exception to be handled by the calling view
         raise
-
