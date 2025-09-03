@@ -1,5 +1,5 @@
 from django import forms
-from .models import Customer, Product, Quotation, TermsAndConditions, EmailTemplate
+from .models import Customer, Product, Quotation, TermsAndConditions, EmailTemplate, ProductDetails
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from .models import Lead, Customer
@@ -16,15 +16,24 @@ class ProductForm(forms.ModelForm):
         model = Product
         fields = [
             "name", "description", "category", "cost_price", 
-            "selling_price", "tax_rate", "unit", "weight", 
+            "selling_price", "unit", "weight", 
             "dimensions", "warranty_months", "brand", "is_available", "active"
         ]
+
+class ProductDetailsForm(forms.ModelForm):
+    class Meta:
+        model = ProductDetails
+        fields = [
+            'product', 'quantity', 'unit_price',
+            'selling_price', 'discount'
+        ]
+
 class QuotationForm(forms.ModelForm):
     class Meta:
         model = Quotation
         fields = [
             'customer', 'assigned_to', 'terms', 'email_template', 'discount',
-            'follow_up_date','status','discount_type'
+            'follow_up_date','status','discount_type', 'tax_rate' 
         ]
     
     def __init__(self, *args, **kwargs):
@@ -34,6 +43,7 @@ class QuotationForm(forms.ModelForm):
         self.fields['email_template'].required = False
         self.fields['follow_up_date'].required = False
         self.fields['status'].required = False
+        self.fields['tax_rate'].required = False
         
 class SalespersonForm(UserCreationForm):
     first_name = forms.CharField(required=True)

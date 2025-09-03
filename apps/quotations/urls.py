@@ -4,6 +4,7 @@ from django.urls import path
 from .terms_views import (
     TermsListView,
     TermsCreateView,
+    TermDeleteView
 )
 from .quotation_create_view import(
     QuotationCreateView
@@ -44,6 +45,8 @@ from .views import (
     # Product & Customer Search
     ProductSearchView,
     CustomerSearchView,
+
+
 )
 
 app_name = "quotations"
@@ -95,4 +98,5 @@ urlpatterns = [
     #============Terms API ==================
     path('api/terms/', TermsListView.as_view(), name='terms-list'),
     path('api/terms/create/', TermsCreateView.as_view(), name='terms-create'),
+    path('api/terms/<int:id>/delete/', TermDeleteView.as_view(), name='terms-delete'),
 ]

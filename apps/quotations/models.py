@@ -41,7 +41,7 @@ class Customer(TimestampedModel):
         indexes = [
             models.Index(fields=['email']),
             models.Index(fields=['name']),
-        ]
+        ]   
 
     def __str__(self):
         return f"{self.name} ({self.company_name})" if self.company_name else self.name
@@ -58,8 +58,6 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)
-    profit_margin = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)    
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default='piece',null=True,blank=True)
     weight = models.DecimalField(max_digits=8, decimal_places=3, null=True, blank=True)
     dimensions = models.CharField(max_length=100, blank=True)
@@ -84,6 +82,8 @@ class TermsAndConditions(TimestampedModel):
     title = models.CharField(max_length=255)
     content_html = models.TextField()
     is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=255,blank=True ,null=True)
 
     def __str__(self):
         return self.title
@@ -131,13 +131,12 @@ class Quotation(TimestampedModel):
     assigned_to = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
     terms = models.ManyToManyField(TermsAndConditions, blank=True)
     email_template = models.ForeignKey(EmailTemplate, on_delete=models.SET_NULL, null=True, blank=True)
-    product = models.ManyToManyField(Product,blank=True)
     status = models.CharField(max_length=20, choices=QuotationStatus.choices, default=QuotationStatus.PENDING)
     follow_up_date = models.DateField(null=True, blank=True)
     discount_type = models.CharField(max_length=20, choices=[('percentage', 'Percentage'), ('amount','Amount')], default='percentage', null=True, blank=True)
     currency = models.CharField(max_length=10, default='INR')
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    tax_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    tax_rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'),blank=True,null=True)
     emailed_at = models.DateTimeField(null=True, blank=True)
@@ -199,6 +198,21 @@ class Quotation(TimestampedModel):
 
 #     def __str__(self):
 #         return f"{self.product.name} x {self.quantity}"
+
+class ProductDetails(TimestampedModel):
+    quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='details')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='details')
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)
+    discount = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal,null=True, blank=True) 
+
+    class Meta:
+        indexes = [models.Index(fields=['product'])]
+
+    def __str__(self):
+        return f"{self.product.name} x {self.quantity}"
+
 
 class EmailLog(TimestampedModel):
     to_email = models.EmailField()

@@ -27,13 +27,11 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
                 continue
                 
             unit_price = item.get('unit_price') or product.selling_price
-            tax_rate = item.get('tax_rate') or product.tax_rate
             
             enriched_item = {
                 'product': {'id': product.id, 'name': product.name},
                 'quantity': item.get('quantity', 1),
                 'unit_price': str(unit_price),
-                'tax_rate': str(tax_rate),
                 'description': item.get('description', product.name),
                 'discount': item.get('discount', 0)
             }

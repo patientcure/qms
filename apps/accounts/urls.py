@@ -7,7 +7,8 @@ from .views import (
     CurrentUserView,
     QuotationStatusUpdateView,
     LeadStatusUpdateView,
-    UserListView
+    UserListView,
+    DeleteUserView
 )
 
 app_name = "accounts"
@@ -20,6 +21,8 @@ urlpatterns = [
     path("api/logout/", LogoutView.as_view(), name="logout"),
     path("api/user/current/", CurrentUserView.as_view(), name="current_user"),
     path("api/users/", UserListView.as_view(), name="user_list"),
+    path("api/users/<int:user_id>/delete/", DeleteUserView.as_view(), name="delete_user"),
+    # ========== Password Management API ==========
 
     
     # ========== Status Update API ==========

@@ -171,6 +171,25 @@ class CreateUserView(BaseAPIView):
                 'success': False,
                 'error': f'Failed to create user: {str(e)}'
             }, status=400)
+        
+class DeleteUserView(APIView):
+    def delete(self, request, user_id):
+        print("Request user:", request.user)
+        print("Role:", getattr(request.user, "role", None))
+        if request.user.role != "ADMIN":
+
+            return JsonResponse({
+                'success': False,
+                'error': 'Permission denied. Administrator access required.'
+            }, status=403)
+        
+        user = get_object_or_404(User, pk=user_id)
+        
+        user.delete()
+        return JsonResponse({
+            'success': True,
+            'message': f'User {user.username} deleted successfully'
+        })
 
 class UserListView(APIView):
 

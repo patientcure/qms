@@ -12,5 +12,10 @@ class TermsListView(generics.ListAPIView):
 class TermsCreateView(generics.CreateAPIView):
     queryset = TermsAndConditions.objects.all()
     serializer_class = TermsAndConditionsSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
+class TermDeleteView(generics.DestroyAPIView):
+    queryset = TermsAndConditions.objects.all()
+    serializer_class = TermsAndConditionsSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'id'

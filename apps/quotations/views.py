@@ -384,10 +384,12 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
 
 class QuotationListView(BaseAPIView):
     def get(self, request):
-        # if request.user.role == Roles.ADMIN:
-        quotations = Quotation.objects.select_related('customer', 'assigned_to')
-        # else:
-        #     quotations = Quotation.objects.filter(assigned_to=request.user).select_related('customer', 'assigned_to')
+
+        quotations = Quotation.objects.select_related(
+            'customer', 'assigned_to'
+        ).prefetch_related(
+            'terms', 'details__product' 
+        )
         
         data = []
         for quotation in quotations:
@@ -399,7 +401,7 @@ class QuotationListView(BaseAPIView):
                 'discount': float(quotation.discount) if quotation.discount else 0.0,
                 'discount_type': quotation.discount_type,
                 'subtotal': float(quotation.subtotal),
-                'tax_total': float(quotation.tax_total),
+                'tax_rate': float(quotation.tax_rate), 
                 'total': float(quotation.total),
                 'terms': [
                     {
@@ -419,19 +421,18 @@ class QuotationListView(BaseAPIView):
                 'products':[
                     {
                         'id': item.id,
-                        'selling_price': item.selling_price,
-                        'description': item.description,
-                        'tax_rate': float(item.tax_rate),
-                        'name' : item.name if item.name else None,
-                    } for item in quotation.product.all()
+                        'product_id': item.product.id,
+                        'name' : item.product.name,
+                        'selling_price': float(item.selling_price),
+                        'quantity': item.quantity,
+                        'description': item.product.description if hasattr(item.product, 'description') else '',
+                    } for item in quotation.details.all() 
                 ],
                 'created_at': quotation.created_at,
                 'emailed_at': quotation.emailed_at,
                 'follow_up_date': quotation.follow_up_date
             })
         return JsonResponse({'data': data})
-
-
         
 class QuotationPDFView(BaseAPIView):
     def get(self, request, quotation_id):
@@ -573,6 +574,12 @@ class CustomerListView(AdminRequiredMixin, BaseAPIView):
                 'name': customer.name,
                 'email': customer.email,
                 'company_name': customer.company_name,
+                'gst_number': customer.gst_number,
+                'website': customer.website,
+                'shipping_address': customer.shipping_address,
+                'billing_address': customer.billing_address,
+                'primary_address': customer.primary_address,
+                'title': customer.title,
                 'phone': customer.phone,
                 'address': customer.primary_address,
                 'created_at': customer.created_at
@@ -761,8 +768,6 @@ class ProductListView(BaseAPIView):
                 'category': product.category.name if product.category else None,
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
-                'tax_rate': float(product.tax_rate),
-                'profit_margin': float(product.profit_margin),
                 'unit': product.unit,
                 'description': product.description,
                 'is_available': product.is_available,
@@ -776,19 +781,32 @@ class ProductListView(BaseAPIView):
 
 
 class ProductCreateView(JWTAuthentication, BaseAPIView):
-
     def _parse_request_data(self, request):
         if request.content_type == 'application/json':
             try:
                 return json.loads(request.body.decode('utf-8'))
             except json.JSONDecodeError:
                 return None
-        return request.POST.dict()
+        return request.POST.copy() # Use copy to make it mutable
+
+    def _handle_category(self, data):
+        category_data = data.get('category')
+        if category_data and isinstance(category_data, str):
+            # Use get_or_create to find or create the category
+            category, created = Category.objects.get_or_create(
+                name__iexact=category_data, # Case-insensitive check
+                defaults={'name': category_data}
+            )
+            # Replace the category name in the data with its ID for the form
+            data['category'] = category.pk
+        return data
 
     def post(self, request):
         data = self._parse_request_data(request)
         if data is None:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        data = self._handle_category(data)
 
         form = ProductForm(data)
         if form.is_valid():
@@ -800,10 +818,8 @@ class ProductCreateView(JWTAuthentication, BaseAPIView):
                     'id': product.id,
                     'name': product.name,
                     'category': product.category.name if product.category else None,
-                    'cost_price': float(product.cost_price),
-                    'selling_price': float(product.selling_price),
-                    'tax_rate': float(product.tax_rate),
-                    'profit_margin': float(product.profit_margin),
+                    'cost_price': float(product.cost_price or 0),
+                    'selling_price': float(product.selling_price or 0),
                     'unit': product.unit
                 }
             }, status=201)
@@ -821,21 +837,32 @@ class ProductCreateView(JWTAuthentication, BaseAPIView):
         if data is None:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
+        data = self._handle_category(data)
+
         form = ProductForm(data, instance=product)
         if form.is_valid():
+            # Only save the fields that were actually sent in the request
+            update_fields = [f for f in data.keys() if f in form.cleaned_data]
+            
+            # If category was updated, ensure it's in the list
+            if 'category' in data and 'category' not in update_fields:
+                update_fields.append('category')
+
             product = form.save(commit=False)
-
-            update_fields = [
-                f for f in data.keys()
-                if f in form.cleaned_data and hasattr(product, f)
-            ]
-            for field in update_fields:
-                setattr(product, field, form.cleaned_data[field])
-
             product.save(update_fields=update_fields)
-
-            updated_data = {field: getattr(product, field) for field in update_fields}
+            
+            # Prepare response data, handling Decimal serialization
+            updated_data = {}
+            for field in update_fields:
+                value = getattr(product, field)
+                if isinstance(value, Decimal):
+                    updated_data[field] = float(value)
+                elif isinstance(value, Category):
+                     updated_data[field] = value.name
+                else:
+                    updated_data[field] = value
             updated_data['id'] = product.id
+
 
             return JsonResponse({
                 'success': True,
@@ -844,7 +871,9 @@ class ProductCreateView(JWTAuthentication, BaseAPIView):
             })
 
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+
     def delete(self, request):
+        """Handles deactivating a product (soft delete)."""
         product_id = request.GET.get('id')
         if not product_id:
             return JsonResponse({'error': 'Product ID required in query params'}, status=400)
@@ -855,7 +884,7 @@ class ProductCreateView(JWTAuthentication, BaseAPIView):
         return JsonResponse({
             'success': True,
             'message': 'Product deactivated successfully',
-            'data': {'active': product.active}
+            'data': {'id': product.id, 'active': product.active}
         })
 
 class ProductDetailView(JWTAuthMixin, BaseAPIView):
@@ -867,7 +896,6 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
                 'name': product.name,
                 'category': product.category.name if product.category else None,
                 'selling_price': float(product.selling_price),
-                'tax_rate': float(product.tax_rate),
                 'unit': product.unit,
                 'description': product.description,
                 'weight': float(product.weight) if product.weight else None,
