@@ -564,11 +564,23 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
 
 
 # ========== Customer & Product Management ==========
-class CustomerListView(AdminRequiredMixin, BaseAPIView):
+class CustomerListView(BaseAPIView):
     def get(self, request):
         customers = Customer.objects.all()
         data = []
         for customer in customers:
+            leads = []
+            for lead in Lead.objects.filter(customer=customer) :
+                leads.append({
+                    'id': lead.id,
+                    'status': lead.status,
+                    'lead_source': lead.lead_source,
+                    'assigned_to': {
+                        'id': lead.assigned_to.id if lead.assigned_to else None,
+                        'name': lead.assigned_to.get_full_name() if lead.assigned_to else None
+                    },
+                    'created_at': lead.created_at,
+                })
             data.append({
                 'id': customer.id,
                 'name': customer.name,
@@ -582,7 +594,8 @@ class CustomerListView(AdminRequiredMixin, BaseAPIView):
                 'title': customer.title,
                 'phone': customer.phone,
                 'address': customer.primary_address,
-                'created_at': customer.created_at
+                'created_at': customer.created_at,
+                'leads': leads
             })
         return JsonResponse({'data': data})
 
