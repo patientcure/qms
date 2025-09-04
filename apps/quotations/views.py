@@ -27,8 +27,7 @@ from django.http import JsonResponse
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from .save_quotation import save_quotation_pdf
-
-
+from django.db.models import Prefetch
 import logging
 from django.http import JsonResponse
 from django.db import transaction
@@ -188,45 +187,62 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
             'data': {'is_active': salesperson.is_active}
         })
 #region Leads
-class LeadListView(BaseAPIView):
-    def get(self, request):
-        leads = Lead.objects.select_related('customer', 'assigned_to')
-        data = []
-        for lead in leads:
-            quotation = None
-            file_url = None
-            if lead.quotation_id:
-                try:
-                    quotation = Quotation.objects.get(pk=lead.quotation_id)
-                    file_url = quotation.file_url
-                except Quotation.DoesNotExist:
-                    file_url = None
+class LeadListView(JWTAuthMixin, BaseAPIView):
 
-            data.append({
-                'id': lead.id,
-                'status': lead.status,
-                'source': lead.lead_source,
-                'follow_up_date': lead.follow_up_date,
-                'notes': lead.notes,
-                'priority': lead.priority,
-                'customer': {
-                    'id': lead.customer.id if lead.customer else None,
-                    'name': lead.customer.name if lead.customer else None,
-                    'company_name': lead.customer.company_name if lead.customer else None,
-                    'phone': lead.customer.phone if lead.customer else None,
-                    'email': lead.customer.email if lead.customer else None,
-                    'primary_address': lead.customer.primary_address if lead.customer else None,
-                },
-                'assigned_to': {
-                    'id': lead.assigned_to.id if lead.assigned_to else None,
-                    'name': lead.assigned_to.get_full_name() if lead.assigned_to else None,
-                },
-                'quotation': lead.quotation_id,
-                'file_url': file_url,
-                'created_at': lead.created_at,
-                'updated_at': lead.updated_at
-            })
-        return JsonResponse({'data': data})
+    def get(self, request):
+        user = request.user
+
+        # Base queryset with related objects
+        leads = Lead.objects.select_related(
+            "customer", "assigned_to", "created_by"
+        )
+
+        # Restrict SALESPERSON to only their own leads
+        if getattr(user, "role", None) == Roles.SALESPERSON:
+            leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
+
+        # Prefetch quotations (bulk fetch only needed fields)
+        quotation_ids = leads.exclude(quotation_id__isnull=True).values_list(
+            "quotation_id", flat=True
+        )
+        quotations = Quotation.objects.filter(id__in=quotation_ids).only("id", "file_url")
+        quotation_map = {q.id: q.file_url for q in quotations}
+
+        # Serialize leads
+        data = [self.serialize_lead(lead, quotation_map) for lead in leads]
+
+        return JsonResponse({"data": data}, status=200, safe=False)
+
+    @staticmethod
+    def serialize_lead(lead, quotation_map):
+        customer = lead.customer
+        assigned_to = lead.assigned_to
+
+        return {
+            "id": lead.id,
+            "status": lead.status,
+            "source": lead.lead_source,
+            "follow_up_date": lead.follow_up_date,
+            "notes": lead.notes or "",
+            "priority": lead.priority,
+            "customer": {
+                "id": customer.id if customer else None,
+                "name": getattr(customer, "name", None),
+                "company_name": getattr(customer, "company_name", None),
+                "phone": getattr(customer, "phone", None),
+                "email": getattr(customer, "email", None),
+                "primary_address": getattr(customer, "primary_address", None),
+            },
+            "assigned_to": {
+                "id": assigned_to.id if assigned_to else None,
+                "name": assigned_to.get_full_name() if assigned_to else None,
+            },
+            "quotation": lead.quotation_id,
+            "file_url": quotation_map.get(lead.quotation_id),
+            "created_at": lead.created_at,
+            "updated_at": lead.updated_at,
+            "created_by": lead.created_by.get_full_name() if lead.created_by else None,
+        }
 
 
 
@@ -273,6 +289,12 @@ class LeadCreateView(AdminRequiredMixin, BaseAPIView):
                     message="Created via API"
                 )
 
+                ActivityLog.log(
+                    actor=request.user,
+                    action=ActivityAction.LEAD_CREATED,
+                    entity=lead,
+                    message="Created via API"
+                )
                 # 7. Prepare the detailed response.
                 response_data = {
                     'id': lead.id,
@@ -381,16 +403,19 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
                 }
             }
         })
-
-class QuotationListView(BaseAPIView):
+#region Quotations
+class QuotationListView(JWTAuthMixin,BaseAPIView):
     def get(self, request):
-
+        user = request.user
         quotations = Quotation.objects.select_related(
             'customer', 'assigned_to'
         ).prefetch_related(
-            'terms', 'details__product' 
+            'terms', 'details__product'
         )
-        
+
+        if user.role == 'SALESPERSON':
+            quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
+
         data = []
         for quotation in quotations:
             data.append({
@@ -428,9 +453,13 @@ class QuotationListView(BaseAPIView):
                         'description': item.product.description if hasattr(item.product, 'description') else '',
                     } for item in quotation.details.all() 
                 ],
+                'assigned_to': {
+                    'id': quotation.assigned_to.id if quotation.assigned_to else None,
+                    'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
+                },
                 'created_at': quotation.created_at,
                 'emailed_at': quotation.emailed_at,
-                'follow_up_date': quotation.follow_up_date
+                'follow_up_date': quotation.follow_up_date,
             })
         return JsonResponse({'data': data})
         
@@ -459,13 +488,13 @@ class QuotationPDFView(BaseAPIView):
             }, status=500)
 
 
-class QuotationDetailView(JWTAuthMixin, BaseAPIView):  # FIXED: Changed from LoginRequiredMixin
+class QuotationDetailView( BaseAPIView):  # FIXED: Changed from LoginRequiredMixin
     def get(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
         
         # Check permission
-        if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
-            return JsonResponse({'error': 'Permission denied'}, status=403)
+        # if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
+        #     return JsonResponse({'error': 'Permission denied'}, status=403)
         
         
         return JsonResponse({
@@ -474,7 +503,6 @@ class QuotationDetailView(JWTAuthMixin, BaseAPIView):  # FIXED: Changed from Log
                 'quotation_number': quotation.quotation_number,
                 'status': quotation.status,
                 'subtotal': float(quotation.subtotal),
-                'tax_total': float(quotation.tax_total),
                 'total': float(quotation.total),
                 'customer': {
                     'id': quotation.customer.id,
@@ -562,25 +590,37 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
             }
         })
 
-
+#region Customer
 # ========== Customer & Product Management ==========
-class CustomerListView(BaseAPIView):
+class CustomerListView( BaseAPIView):
     def get(self, request):
-        customers = Customer.objects.all()
+        customers = Customer.objects.prefetch_related(
+            Prefetch('leads')
+        )
         data = []
         for customer in customers:
             leads = []
-            for lead in Lead.objects.filter(customer=customer) :
+            for lead in customer.leads.all():
+                file_url = None
+                if lead.quotation_id:
+                    try:
+                        file_url = Quotation.objects.get(pk=lead.quotation_id).file_url
+                    except Quotation.DoesNotExist:
+                        file_url = None
+
                 leads.append({
                     'id': lead.id,
                     'status': lead.status,
                     'lead_source': lead.lead_source,
+                    'file_url': file_url,
+                    'quotation': lead.quotation_id,
                     'assigned_to': {
                         'id': lead.assigned_to.id if lead.assigned_to else None,
-                        'name': lead.assigned_to.get_full_name() if lead.assigned_to else None
+                        'name': lead.assigned_to.get_full_name() if lead.assigned_to else None,
                     },
                     'created_at': lead.created_at,
                 })
+
             data.append({
                 'id': customer.id,
                 'name': customer.name,
@@ -593,11 +633,11 @@ class CustomerListView(BaseAPIView):
                 'primary_address': customer.primary_address,
                 'title': customer.title,
                 'phone': customer.phone,
-                'address': customer.primary_address,
                 'created_at': customer.created_at,
-                'leads': leads
+                'leads': leads,
             })
-        return JsonResponse({'data': data})
+
+        return JsonResponse({'data': data}, safe=False)
 
 
 class CustomerCreateView( BaseAPIView):
