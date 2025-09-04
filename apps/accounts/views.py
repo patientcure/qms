@@ -310,55 +310,69 @@ class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
 
 
 # ========== Lead Status Update API ==========
-class LeadStatusUpdateView(JWTAuthMixin, BaseAPIView):
-    def put(self, request, lead_id):
-        lead = get_object_or_404(Lead, pk=lead_id, assigned_to=request.user)
+import traceback
 
-        changes = []
-        
-        status = request.json.get("status")
-        if status and status != lead.status:
-            old_status = lead.status
-            lead.status = status
-            changes.append(f"Status changed from {old_status} to {status}")
-        
-        follow_up_date_str = request.json.get("follow_up_date")
-        if follow_up_date_str:
+class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
+    def put(self, request, lead_id):
+        try:
+            lead = get_object_or_404(Lead, pk=lead_id)
+
             try:
-                new_date = datetime.strptime(follow_up_date_str, "%Y-%m-%d").date()
-                if lead.follow_up_date != new_date:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return JsonResponse({'success': False, 'error': 'Invalid JSON.'}, status=400)
+
+            changes = []
+            fields_to_update = []
+
+            status = data.get("status")
+            if status and status != lead.status:
+                old_status = lead.status
+                lead.status = status
+                changes.append(f"Status changed from {old_status} to {status}")
+                fields_to_update.append('status')
+
+            follow_up_date_str = data.get("follow_up_date")
+            if follow_up_date_str:
+                try:
+                    new_date = datetime.strptime(follow_up_date_str, "%Y-%m-%d").date()
+                    if lead.follow_up_date != new_date:
+                        old_date = lead.follow_up_date
+                        lead.follow_up_date = new_date
+                        changes.append(f"Follow-up date changed from {old_date} to {new_date}")
+                        fields_to_update.append('follow_up_date')
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Invalid follow-up date format. Use YYYY-MM-DD.'}, status=400)
+            elif follow_up_date_str == "":
+                if lead.follow_up_date:
                     old_date = lead.follow_up_date
-                    lead.follow_up_date = new_date
-                    changes.append(f"Follow-up date changed from {old_date} to {new_date}")
-            except ValueError:
-                return JsonResponse({'success': False, 'error': 'Invalid follow-up date format. Use YYYY-MM-DD.'}, status=400)
-        elif follow_up_date_str == "":
-            if lead.follow_up_date:
-                old_date = lead.follow_up_date
-                lead.follow_up_date = None
-                changes.append(f"Follow-up date removed (was {old_date})")
-        
-        if changes:
-            lead.save(update_fields=['status', 'follow_up_date'])
-            message = "; ".join(changes)
-            ActivityLog.log(
-                actor=request.user,
-                action=ActivityAction.LEAD_UPDATED,
-                entity=lead,
-                message=message
-            )
-            
-            return JsonResponse({
-                'success': True,
-                'message': 'Lead updated successfully',
-                'data': {
-                    'id': lead.id,
-                    'status': lead.status,
-                    'follow_up_date': lead.follow_up_date.isoformat() if lead.follow_up_date else None,
-                    'changes': changes
-                }
-            })
-        else:
+                    lead.follow_up_date = None
+                    changes.append(f"Follow-up date removed (was {old_date})")
+                    fields_to_update.append('follow_up_date')
+
+            if fields_to_update:
+                lead.save(update_fields=fields_to_update)
+                try:
+                    ActivityLog.log(
+                        actor=request.user,
+                        action=ActivityAction.LEAD_UPDATED,
+                        entity=lead,
+                        message="; ".join(changes)
+                    )
+                except Exception as e:
+                    return JsonResponse({'success': False, 'error': f'Activity log failed: {str(e)}'}, status=500)
+
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Lead updated successfully',
+                    'data': {
+                        'id': lead.id,
+                        'status': lead.status,
+                        'follow_up_date': lead.follow_up_date.isoformat() if lead.follow_up_date else None,
+                        'changes': changes
+                    }
+                })
+
             return JsonResponse({
                 'success': True,
                 'message': 'No changes made',
@@ -368,3 +382,9 @@ class LeadStatusUpdateView(JWTAuthMixin, BaseAPIView):
                     'follow_up_date': lead.follow_up_date.isoformat() if lead.follow_up_date else None
                 }
             })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }, status=500)
