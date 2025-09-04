@@ -1,4 +1,3 @@
-# views.py
 import os
 import io
 import requests
@@ -20,14 +19,23 @@ logger = logging.getLogger(__name__)
 def merge_pdfs_from_urls(pdf_urls, save_folder='merged_pdfs'):
     try:
         merger = PyPDF2.PdfMerger()
+        successful_urls = []
 
         for url in pdf_urls:
-            response = requests.get(url)
-            if response.status_code == 200:
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()  # raises HTTPError for bad status
                 pdf_file = io.BytesIO(response.content)
+                # Attempt to read PDF to make sure it's valid
+                PyPDF2.PdfReader(pdf_file)
+                pdf_file.seek(0)
                 merger.append(pdf_file)
-            else:
-                logger.warning(f"Failed to fetch PDF from {url}. Status code: {response.status_code}")
+                successful_urls.append(url)
+            except Exception as e:
+                logger.warning(f"Skipping PDF {url} due to error: {e}")
+
+        if not successful_urls:
+            raise Exception("No valid PDFs to merge.")
 
         # Write merged PDF to in-memory bytes
         merged_pdf_bytes = io.BytesIO()
@@ -46,7 +54,7 @@ def merge_pdfs_from_urls(pdf_urls, save_folder='merged_pdfs'):
         pdf_url = gcs_storage.url(saved_path)
 
         logger.info(f"Merged PDF uploaded successfully: {pdf_url}")
-        return  pdf_url
+        return pdf_url
 
     except Exception as e:
         logger.error(f"Error merging PDFs: {e}", exc_info=True)
