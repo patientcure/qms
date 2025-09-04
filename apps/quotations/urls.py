@@ -10,6 +10,7 @@ from .terms_views import (
 from .quotation_create_view import(
     QuotationCreateView
 )
+from .merge_pdf import MergePDFsAPIView
 from .views import (
     # Salesperson Management
     SalespersonListView,
@@ -33,6 +34,7 @@ from .views import (
     CustomerListView,
     CustomerCreateView,
     CustomerDetailView,
+    AllCustomerListView,
     
     # Product Management
     ProductListView,
@@ -46,6 +48,8 @@ from .views import (
     # Product & Customer Search
     ProductSearchView,
     CustomerSearchView,
+    
+    
 
 
 )
@@ -88,6 +92,7 @@ urlpatterns = [
 
     # ========== Customer Management API ==========
     path('api/customers/', CustomerListView.as_view(), name='customer_list'),
+    path('api/customers/all/', AllCustomerListView.as_view(), name='all_customer_list'),
     path('api/customers/create/', CustomerCreateView.as_view(), name='customer_create'),
     path('api/customers/<int:customer_id>/', CustomerDetailView.as_view(), name='customer_detail'),
     path('api/customers/search/', CustomerSearchView.as_view(), name='customer_search'),
@@ -101,4 +106,5 @@ urlpatterns = [
     path('api/terms/create/', TermsCreateView.as_view(), name='terms-create'),
     path('api/terms/<int:id>/update/', TermUpdateView.as_view(), name='terms-update'),
     path('api/terms/<int:id>/delete/', TermDeleteView.as_view(), name='terms-delete'),
+    path('api/merge/', MergePDFsAPIView.as_view(), name='merge_pdfs'),
 ]

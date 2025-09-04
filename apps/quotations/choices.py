@@ -36,6 +36,7 @@ class QuotationStatus(models.TextChoices):
     ACCEPTED = 'ACCEPTED', 'Accepted'
     REJECTED = 'REJECTED', 'Rejected'
     EXPIRED = 'EXPIRED', 'Expired'
+    REVISED = 'REVISED', 'Revised'
 class ActivityAction(models.TextChoices):
     # User actions
     LOGIN = 'LOGIN', _('User Login')

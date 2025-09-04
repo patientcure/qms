@@ -14,8 +14,9 @@ from apps.accounts.models import User, Roles
 from django.db.models import Count
 from decimal import Decimal
 from .email_service import send_quotation_email
+from .views import JWTAuthMixin
 
-class QuotationCreateView(BaseAPIView):
+class QuotationCreateView(JWTAuthMixin,BaseAPIView):
     def _create_or_update_product_details(self, quotation, items_data):
         if not quotation._state.adding:
             quotation.details.all().delete()
@@ -176,11 +177,21 @@ class QuotationCreateView(BaseAPIView):
                 from .utils import generate_next_quotation_number
                 quotation.quotation_number = generate_next_quotation_number()
 
+            if getattr(request.user, 'role', None) == Roles.SALESPERSON:
+                quotation.created_by = request.user
             if not quotation.assigned_to and request_json.get('auto_assign', True):
-                salesperson = User.objects.filter(role=Roles.SALESPERSON, is_active=True).annotate(num_quotations=Count('quotations')).order_by('num_quotations', 'id').first()
-                if salesperson:
-                    quotation.assigned_to = salesperson
-
+                if getattr(request.user, 'role', None) == Roles.SALESPERSON:
+                    quotation.assigned_to = request.user
+                else:
+                    salesperson = (
+                        User.objects
+                        .filter(role=Roles.SALESPERSON, is_active=True)
+                        .annotate(num_quotations=Count('quotations'))
+                        .order_by('num_quotations', 'id')
+                        .first()
+                    )
+                    if salesperson:
+                        quotation.assigned_to = salesperson
             quotation.save()
 
             user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None

@@ -246,7 +246,7 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
 
 
 
-class LeadCreateView(AdminRequiredMixin, BaseAPIView):
+class LeadCreateView(JWTAuthMixin,BaseAPIView):
     @transaction.atomic
     def post(self, request):
         try:
@@ -259,15 +259,13 @@ class LeadCreateView(AdminRequiredMixin, BaseAPIView):
                 # correct customer already attached, thanks to your form's logic.
                 lead = form.save(commit=False)
 
-                # --- Perform logic that only the View should handle ---
-
-                # 2. Set the lead's creator from the request user.
+            if getattr(request.user, 'role', None) == 'SALESPERSON':
                 lead.created_by = request.user
-                if not lead.assigned_to:
-                    salesperson = Lead.get_least_loaded_salesperson()
-                    if salesperson:
-                        lead.assigned_to = salesperson
 
+            if not lead.assigned_to:
+                salesperson = Lead.get_least_loaded_salesperson()
+                if salesperson:
+                    lead.assigned_to = salesperson
                 # 4. Create a corresponding empty quotation.
                 quotation = Quotation.objects.create(
                     customer=lead.customer, # Use the customer from the validated lead
@@ -282,13 +280,6 @@ class LeadCreateView(AdminRequiredMixin, BaseAPIView):
                 quotation.save(update_fields=['lead_id'])
 
                 # 6. Log the activity.
-                ActivityLog.log(
-                    actor=request.user,
-                    action=ActivityAction.LEAD_CREATED,
-                    entity=lead,
-                    message="Created via API"
-                )
-
                 ActivityLog.log(
                     actor=request.user,
                     action=ActivityAction.LEAD_CREATED,
@@ -592,7 +583,67 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
 
 #region Customer
 # ========== Customer & Product Management ==========
-class CustomerListView( BaseAPIView):
+class CustomerListView(JWTAuthMixin,BaseAPIView):
+    def get(self, request):
+        user = request.user
+
+        leads_qs = Lead.objects.select_related('assigned_to', 'created_by')
+
+        if getattr(user, 'role', None) == 'SALESPERSON':
+            leads_qs = leads_qs.filter(Q(assigned_to=user) | Q(created_by=user))
+
+        customers = Customer.objects.prefetch_related(
+            Prefetch('leads', queryset=leads_qs, to_attr='filtered_leads')
+        )
+
+        data = []
+        for customer in customers:
+            filtered_leads = getattr(customer, 'filtered_leads', [])
+            if not filtered_leads:
+                continue
+
+            leads_data = []
+            for lead in filtered_leads:
+                file_url = None
+                if lead.quotation_id:
+                    try:
+                        file_url = Quotation.objects.get(pk=lead.quotation_id).file_url
+                    except Quotation.DoesNotExist:
+                        pass
+
+                leads_data.append({
+                    'id': lead.id,
+                    'status': lead.status,
+                    'lead_source': lead.lead_source,
+                    'file_url': file_url,
+                    'quotation': lead.quotation_id,
+                    'assigned_to': {
+                        'id': lead.assigned_to.id if lead.assigned_to else None,
+                        'name': lead.assigned_to.get_full_name() if lead.assigned_to else None,
+                    },
+                    'created_at': lead.created_at,
+                    'created_by': lead.created_by.get_full_name() if lead.created_by else None,
+                })
+
+            data.append({
+                'id': customer.id,
+                'name': customer.name,
+                'email': customer.email,
+                'company_name': customer.company_name,
+                'gst_number': customer.gst_number,
+                'website': customer.website,
+                'shipping_address': customer.shipping_address,
+                'billing_address': customer.billing_address,
+                'primary_address': customer.primary_address,
+                'title': customer.title,
+                'phone': customer.phone,
+                'created_at': customer.created_at,
+                'leads': leads_data,
+            })
+
+        return JsonResponse({'data': data}, safe=False)
+    
+class AllCustomerListView( BaseAPIView):
     def get(self, request):
         customers = Customer.objects.prefetch_related(
             Prefetch('leads')
@@ -638,7 +689,6 @@ class CustomerListView( BaseAPIView):
             })
 
         return JsonResponse({'data': data}, safe=False)
-
 
 class CustomerCreateView( BaseAPIView):
 

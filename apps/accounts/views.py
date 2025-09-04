@@ -14,6 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from apps.accounts.models import User,Roles
+from apps.quotations.views import JWTAuthMixin
 class ProtectedView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -230,7 +231,7 @@ class LogoutView(BaseAPIView):
             return JsonResponse({'success': False, 'error': 'Invalid refresh token'}, status=400)
 
 
-class CurrentUserView(LoginRequiredMixin, View):
+class CurrentUserView(JWTAuthMixin, View):
     def get(self, request):
         user = request.user
         return JsonResponse({
@@ -245,20 +246,18 @@ class CurrentUserView(LoginRequiredMixin, View):
                     'last_name': user.last_name,
                     'is_active': user.is_active,
                     'date_joined': user.date_joined,
-                    'last_login': user.last_login
+                    'address' : user.address,
                 }
             }
         })
 
 
 # ========== Quotation Status Update API ==========
-class QuotationStatusUpdateView(LoginRequiredMixin, BaseAPIView):
+class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
     def put(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
         
-        if request.user.role == "SALESPERSON" and quotation.assigned_to != request.user:
-            return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
-        
+
         changes = []
         
         status = request.json.get("status")
@@ -311,13 +310,10 @@ class QuotationStatusUpdateView(LoginRequiredMixin, BaseAPIView):
 
 
 # ========== Lead Status Update API ==========
-class LeadStatusUpdateView(LoginRequiredMixin, BaseAPIView):
+class LeadStatusUpdateView(JWTAuthMixin, BaseAPIView):
     def put(self, request, lead_id):
-        if request.user.role == "SALESPERSON":
-            lead = get_object_or_404(Lead, pk=lead_id, assigned_to=request.user)
-        else:
-            lead = get_object_or_404(Lead, pk=lead_id)
-        
+        lead = get_object_or_404(Lead, pk=lead_id, assigned_to=request.user)
+
         changes = []
         
         status = request.json.get("status")
