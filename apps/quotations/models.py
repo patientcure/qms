@@ -7,6 +7,7 @@ from .choices import LeadStatus, QuotationStatus, ActivityAction,CATEGORY_CHOICE
 from apps.quotations.utils import generate_next_quotation_number
 User = settings.AUTH_USER_MODEL
 from crum import get_current_user
+from apps.accounts.models import User,Roles
 
 
 class TimestampedModel(models.Model):
@@ -126,6 +127,16 @@ class Lead(TimestampedModel):
             if user and not user.is_anonymous:
                 self.created_by = user
         super().save(*args, **kwargs)
+    
+    @staticmethod
+    def get_least_loaded_salesperson():
+        return (
+            User.objects
+            .filter(role=Roles.SALESPERSON, is_active=True)
+            .annotate(num_leads=Count('leads'))
+            .order_by('num_leads', 'id')
+            .first()
+        )
 
 
 class Quotation(TimestampedModel):

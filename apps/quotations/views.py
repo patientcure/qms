@@ -246,72 +246,77 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
 
 
 
-class LeadCreateView(JWTAuthMixin,BaseAPIView):
+class LeadCreateView(JWTAuthMixin, BaseAPIView):
     @transaction.atomic
     def post(self, request):
         try:
-            # 1. Pass all request data directly to your form.
-            # The form will handle validation and creating/finding the customer.
+            # 1. Pass all request data directly to the form.
             form = LeadForm(request.json)
 
-            if form.is_valid():
-                # form.save() will now return a lead instance with the
-                # correct customer already attached, thanks to your form's logic.
-                lead = form.save(commit=False)
+            # 2. Return immediately if the form is invalid
+            if not form.is_valid():
+                return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
+            # 3. Create lead instance but do not save yet
+            lead = form.save(commit=False)
+
+            # 4. Set created_by if user is SALESPERSON
             if getattr(request.user, 'role', None) == 'SALESPERSON':
                 lead.created_by = request.user
 
+            # 5. Auto-assign lead if not assigned
             if not lead.assigned_to:
                 salesperson = Lead.get_least_loaded_salesperson()
                 if salesperson:
                     lead.assigned_to = salesperson
-                # 4. Create a corresponding empty quotation.
-                quotation = Quotation.objects.create(
-                    customer=lead.customer, # Use the customer from the validated lead
-                    assigned_to=lead.assigned_to,
-                    status=QuotationStatus.PENDING
-                )
-                lead.quotation_id = quotation.id
 
-                # 5. Save the objects to the database and finalize links.
-                lead.save()
-                quotation.lead_id = lead.id
-                quotation.save(update_fields=['lead_id'])
+            # 6. Create a corresponding empty quotation
+            quotation = Quotation.objects.create(
+                customer=lead.customer,
+                assigned_to=lead.assigned_to,
+                status=QuotationStatus.PENDING
+            )
+            lead.quotation_id = quotation.id
 
-                # 6. Log the activity.
-                ActivityLog.log(
-                    actor=request.user,
-                    action=ActivityAction.LEAD_CREATED,
-                    entity=lead,
-                    message="Created via API"
-                )
-                # 7. Prepare the detailed response.
-                response_data = {
-                    'id': lead.id,
-                    'status': lead.status,
-                    'priority': lead.priority,
-                    'customer': {
-                        'id': lead.customer.id,
-                        'name': lead.customer.name,
-                        'phone': lead.customer.phone,
-                    },
-                    'assigned_to': {
-                        'id': lead.assigned_to.id,
-                        'name': lead.assigned_to.get_full_name()
-                    } if lead.assigned_to else None,
-                    'quotation': {
-                        'id': quotation.id,
-                        'quotation_number': quotation.quotation_number,
-                        'lead_id': quotation.lead_id
-                    }
+            # 7. Save lead and update quotation with lead_id
+            lead.save()
+            quotation.lead_id = lead.id
+            quotation.save(update_fields=['lead_id'])
+
+            # 8. Log the activity
+            ActivityLog.log(
+                actor=request.user,
+                action=ActivityAction.LEAD_CREATED,
+                entity=lead,
+                message="Created via API"
+            )
+
+            # 9. Prepare response data
+            response_data = {
+                'id': lead.id,
+                'status': lead.status,
+                'priority': lead.priority,
+                'customer': {
+                    'id': lead.customer.id,
+                    'name': lead.customer.name,
+                    'phone': lead.customer.phone,
+                },
+                'assigned_to': {
+                    'id': lead.assigned_to.id,
+                    'name': lead.assigned_to.get_full_name()
+                } if lead.assigned_to else None,
+                'quotation': {
+                    'id': quotation.id,
+                    'quotation_number': quotation.quotation_number,
+                    'lead_id': quotation.lead_id
                 }
-                return JsonResponse({
-                    'success': True,
-                    'message': "Lead and corresponding quotation created successfully",
-                    'data': response_data
-                }, status=201)
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            }
+
+            return JsonResponse({
+                'success': True,
+                'message': "Lead and corresponding quotation created successfully",
+                'data': response_data
+            }, status=201)
 
         except Exception as e:
             import traceback
