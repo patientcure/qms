@@ -170,17 +170,53 @@ class QuotationPDFGenerator:
         
     def _build_terms(self):
         elements = []
-        if not self.terms: return elements
-        try:
-            terms_to_display = list(Term.objects.filter(id__in=self.terms))
-        except (ValueError, TypeError): return []
-        if not terms_to_display: return elements
+        terms_to_display = []
 
-        elements.append(Paragraph("Terms & Conditions:", self.section_heading_style))
-        for term in terms_to_display:
-            elements.append(Paragraph(term.title, self.terms_heading_style))
-            content = (term.content_html or "").replace('<p>', '').replace('</p>', '<br/>').replace('&nbsp;', ' ')
-            elements.append(Paragraph(content, self.terms_content_style))
+        # Get terms to display
+        if self.terms:
+            terms_to_display = list(Term.objects.filter(id__in=self.terms))
+
+        if not terms_to_display and hasattr(self.quotation, 'terms') and self.quotation.terms:
+            try:
+                if isinstance(self.quotation.terms, str):
+                    term_ids = [int(t.strip()) for t in self.quotation.terms.split(",") if t.strip().isdigit()]
+                    terms_to_display = list(Term.objects.filter(id__in=term_ids))
+                else:
+                    terms_to_display = list(self.quotation.terms.all())
+            except Exception:
+                pass
+
+        if terms_to_display:
+            elements.append(Paragraph("Terms & Conditions:", self.section_heading_style))
+            
+            for term in terms_to_display:
+                elements.append(Paragraph(term.title, self.terms_heading_style))
+                content = getattr(term, 'content_html', '') or str(getattr(term, 'content', ''))
+                if content:
+                    # Extract bullet points from stars and normal text
+                    bullet_points = re.findall(r'\*(.*?)\*', content)
+                    normal_text = re.sub(r'\*(.*?)\*', '', content).strip()
+                    
+                    # Add normal text first if exists
+                    if normal_text:
+                        clean_normal_text = self._clean_html_content(normal_text)
+                        if clean_normal_text:
+                            elements.append(Paragraph(clean_normal_text, self.terms_content_style))
+                    
+                    # Add bullet points if exists
+                    if bullet_points:
+                        bullet_items = [ListItem(Paragraph(bp.strip(), self.terms_content_style)) for bp in bullet_points]
+                        elements.append(ListFlowable(bullet_items, bulletType='bullet', leftIndent=10 * mm))
+                
+                elements.append(Spacer(1, 5 * mm))
+        else:
+            # Default terms if none specified
+            elements.append(Paragraph("Terms & Conditions:", self.section_heading_style))
+            default_terms = """
+            1. <b>Pricing:</b> All prices are in Indian Rupees (Rs.) and exclude applicable taxes unless specified.<br/>
+            """
+            elements.append(Paragraph(default_terms, self.terms_content_style))
+
         return elements
 
     def _build_footer(self):
