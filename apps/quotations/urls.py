@@ -10,6 +10,7 @@ from .terms_views import (
 from .quotation_create_view import(
     QuotationCreateView
 )
+from .quotation_create import QuotationCreate
 from .merge_pdf import MergePDFsAPIView
 from .views import (
     # Salesperson Management
@@ -70,7 +71,7 @@ urlpatterns = [
     
     # ========== Quotation Management API ==========
     path('api/quotations/', QuotationListView.as_view(), name='quotation_list'),
-    path('api/quotations/create/', QuotationCreateView.as_view(), name='quotation_create'),
+    path('api/quotations/create/', QuotationCreate.as_view(), name='quotation_create'),
     path('api/quotations/<int:quotation_id>/', QuotationDetailView.as_view(), name='quotation_detail'),
     path('api/quotations/<int:quotation_id>/send/', QuotationSendView.as_view(), name='quotation_send'),
     path('api/quotations/<int:quotation_id>/assign/', QuotationAssignView.as_view(), name='quotation_assign'),

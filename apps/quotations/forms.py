@@ -8,7 +8,7 @@ from apps.accounts.models import User,Roles
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
-        fields = ["id","name", "company_name", "email", "phone", "gst_number","title","website","primary_address","billing_address","shipping_address"]
+        fields = ["name", "company_name", "email", "phone", "gst_number","title","website","primary_address","billing_address","shipping_address"]
 
 class ProductForm(forms.ModelForm):
     discount = forms.DecimalField(required=False, max_digits=10, decimal_places=2, initial=0)
@@ -20,19 +20,28 @@ class ProductForm(forms.ModelForm):
             "dimensions", "warranty_months", "brand", "is_available", "active"
         ]
 
+from django import forms
+from .models import ProductDetails
+
 class ProductDetailsForm(forms.ModelForm):
     class Meta:
         model = ProductDetails
-        fields = [
-            'product', 'quantity', 'unit_price',
-            'selling_price', 'discount'
-        ]
+        fields = ['product', 'quantity', 'unit_price', 'selling_price', 'discount']
+
+    def __init__(self, *args, **kwargs):
+        if 'data' in kwargs:
+            data = kwargs['data'].copy()
+            if 'percentage_discount' in data:
+                data['discount'] = data.pop('percentage_discount')
+            kwargs['data'] = data
+        super().__init__(*args, **kwargs)
+
 
 class QuotationForm(forms.ModelForm):
     class Meta:
         model = Quotation
         fields = [
-            'customer', 'assigned_to', 'terms', 'email_template', 'discount',
+            'assigned_to', 'terms', 'email_template', 'discount',
             'follow_up_date','status','discount_type', 'tax_rate' 
         ]
     

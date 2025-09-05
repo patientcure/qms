@@ -31,6 +31,39 @@ logger = logging.getLogger(__name__)
 
 
 class QuotationCreate(JWTAuthMixin, BaseAPIView):
+    def _handle_customer(self, customer_data):
+        """
+        A centralized method to get, create, or update a customer based on phone number.
+        Returns a tuple: (customer_object, error_response).
+        """
+        phone = customer_data.get("phone")
+        if not phone:
+            return None, JsonResponse({
+                'success': False, 'error': 'Customer phone number is required.'
+            }, status=400)
+
+        customer_instance = None
+        try:
+            # Try to find an existing customer by their phone number
+            customer_instance = Customer.objects.get(phone=phone)
+            # If found, prepare a form to update this instance with new data
+            customer_form = CustomerForm(customer_data, instance=customer_instance)
+        except Customer.DoesNotExist:
+            # If not found, prepare a form to create a new customer
+            customer_form = CustomerForm(customer_data)
+
+        if customer_form.is_valid():
+            customer = customer_form.save()
+            logger.info(f"Customer {'updated' if customer_instance else 'created'}: {customer.phone}")
+            return customer, None
+        else:
+            logger.error(f"Customer form validation failed: {customer_form.errors}")
+            return None, JsonResponse({
+                'success': False,
+                'error': 'Invalid customer data',
+                'customer_errors': customer_form.errors
+            }, status=400)
+
     @transaction.atomic
     def put(self, request):
         """
@@ -50,28 +83,11 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             except Quotation.DoesNotExist:
                 return JsonResponse({"success": False, "error": "Quotation not found."}, status=404)
 
-            # --- Customer Handling Logic ---
-            customer_data = request_json.get("customer", {})
-            customer_id = customer_data.get("id")
-            if customer_id:
-                try:
-                    customer_instance = Customer.objects.get(id=customer_id)
-                    customer_form = CustomerForm(customer_data, instance=customer_instance)
-                except Customer.DoesNotExist:
-                    return JsonResponse({"success": False, "error": f"Customer with id {customer_id} not found."}, status=404)
-            else:
-                customer_form = CustomerForm(customer_data)
-
-            if customer_form.is_valid():
-                customer = customer_form.save()
-                logger.info(f"Customer {'created' if not customer_id else 'updated'}: {customer.id}")
-            else:
-                logger.error(f"Customer form validation failed: {customer_form.errors}")
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Invalid customer data',
-                    'customer_errors': customer_form.errors
-                }, status=400)
+            # --- Customer Handling using 'phone' ---
+            customer, error_response = self._handle_customer(request_json.get("customer", {}))
+            if error_response:
+                return error_response
+            # --- End Customer Handling ---
 
             quotation_data = {k: v for k, v in request_json.items() if k not in [
                 "items", "terms", "send_immediately", "auto_assign", "customer", "quotation_id"
@@ -85,6 +101,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                 return handle_validation_errors(form)
 
             quotation = form.save(commit=False)
+            # Pass the customer object to the quotation internally before saving
             quotation.customer = customer
             
             # Save the main quotation fields first
@@ -96,19 +113,28 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             if valid_term_ids is not None:
                 quotation.terms.set(valid_term_ids)
 
-            # Update product details if provided
             if items_data:
                 create_or_update_product_details(quotation, items_data)
             
-            # FIX: Use the refactored calculation logic
             totals = calculate_totals_from_details(quotation)
             quotation.subtotal = totals['subtotal']
             quotation.total = totals['total']
-            quotation.save(update_fields=['subtotal', 'total']) # Save calculated totals
+            quotation.save(update_fields=['subtotal', 'total'])
+            pdf_url = None
+            if items_data:
+                try:
+                    _, pdf_url = save_quotation_pdf(quotation, request, items_data=items_data, terms=valid_term_ids)
+                    quotation.file_url = pdf_url
+                    quotation.has_pdf = True
+                except Exception as e:
+                    logger.error(f"Failed to generate PDF: {str(e)}")
+                    quotation.has_pdf = False
+            
+            quotation.save(update_fields=['lead_id', 'file_url', 'has_pdf', 'subtotal', 'total'])
+            
 
             logger.info(f"Quotation {quotation.quotation_number} updated successfully")
             
-            # The lead is usually linked on creation, but we fetch it for the response
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
             
             return JsonResponse({
@@ -128,28 +154,10 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             if not request_json:
                 return JsonResponse({'success': False, 'error': 'JSON data is required'}, status=400)
 
-            customer_data = request_json.get('customer', {})
-            customer_id = customer_data.get('id')
-            customer_form = None
-            if customer_id:
-                try:
-                    customer_instance = Customer.objects.get(id=customer_id)
-                    customer_form = CustomerForm(customer_data, instance=customer_instance)
-                except Customer.DoesNotExist:
-                    return JsonResponse({"success": False, "error": f"Customer with id {customer_id} not found."}, status=404)
-            else:
-                customer_form = CustomerForm(customer_data)
-
-            if customer_form.is_valid():
-                customer = customer_form.save()
-                logger.info(f"Customer {'created' if not customer_id else 'updated'}: {customer.id}")
-            else:
-                logger.error(f"Customer form validation failed: {customer_form.errors}")
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Invalid customer data',
-                    'customer_errors': customer_form.errors
-                }, status=400)
+            # --- Customer Handling using 'phone' ---
+            customer, error_response = self._handle_customer(request_json.get("customer", {}))
+            if error_response:
+                return error_response
             # --- End Customer Handling ---
 
             quotation_data = {k: v for k, v in request_json.items() if k not in [
@@ -165,9 +173,9 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                 return handle_validation_errors(form)
 
             quotation = form.save(commit=False)
+            # Pass the customer object to the quotation internally before saving
             quotation.customer = customer
             
-            # Auto-assignment logic
             user = request.user
             if getattr(user, 'role', None) == Roles.SALESPERSON:
                 quotation.created_by = user
@@ -180,23 +188,18 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                     if salesperson:
                         quotation.assigned_to = salesperson
             
-            # Save the quotation object to get an ID before creating related objects.
             quotation.save()
 
-            # Create related ProductDetails
             if items_data:
                 create_or_update_product_details(quotation, items_data)
 
-            # Set ManyToMany terms
             if valid_term_ids:
                 quotation.terms.set(valid_term_ids)
             
-            # FIX: Use the refactored calculation logic after items are saved
             totals = calculate_totals_from_details(quotation)
             quotation.subtotal = totals['subtotal']
             quotation.total = totals['total']
 
-            # Create associated Lead
             lead = Lead.objects.create(
                 customer=customer, 
                 assigned_to=quotation.assigned_to, 
@@ -206,7 +209,6 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             )
             quotation.lead_id = lead.id
 
-            # Handle PDF Generation
             pdf_url = None
             if items_data:
                 try:
@@ -217,7 +219,6 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                     logger.error(f"Failed to generate PDF: {str(e)}")
                     quotation.has_pdf = False
             
-            # Final save with all computed/generated fields
             quotation.save(update_fields=['lead_id', 'file_url', 'has_pdf', 'subtotal', 'total'])
             
             log_quotation_changes(quotation, ActivityAction.QUOTATION_CREATED, user)

@@ -37,7 +37,7 @@ class Customer(TimestampedModel):
     shipping_address = models.CharField(max_length=255, blank=True)
     company_name = models.CharField(max_length=255, blank=True)
     email = models.EmailField(blank=True)
-    phone = models.CharField(max_length=50)
+    phone = models.CharField(max_length=50,unique=True)
     gst_number = models.CharField(max_length=30, blank=True)
 
     class Meta:
@@ -199,7 +199,7 @@ class ProductDetails(TimestampedModel):
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), null=True, blank=True)
-    discount = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal,null=True, blank=True) 
+    discount = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), null=True, blank=True)  
 
     class Meta:
         indexes = [models.Index(fields=['product'])]

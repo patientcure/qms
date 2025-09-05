@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from .utils_quotation import get_quotation_response_data
 from decimal import Decimal
 from rest_framework import generics
 import json
@@ -188,7 +189,6 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
         })
 #region Leads
 class LeadListView(JWTAuthMixin, BaseAPIView):
-
     def get(self, request):
         user = request.user
 
@@ -208,13 +208,37 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
         quotations = Quotation.objects.filter(id__in=quotation_ids).only("id", "file_url")
         quotation_map = {q.id: q.file_url for q in quotations}
 
+        # Fetch activity logs for all leads in bulk
+        lead_ids = leads.values_list("id", flat=True)
+        activity_logs = ActivityLog.objects.filter(
+            entity_type="Lead",
+            entity_id__in=[str(lid) for lid in lead_ids]
+        ).select_related("actor").order_by("-created_at")
+
+        # Group logs by entity_id
+        logs_by_lead = {}
+        for log in activity_logs:
+            lead_id = int(log.entity_id)
+            if lead_id not in logs_by_lead:
+                logs_by_lead[lead_id] = []
+            logs_by_lead[lead_id].append({
+                "id": log.id,
+                "action": log.action,
+                "message": log.message,
+                "actor": {
+                    "id": log.actor.id if log.actor else None,
+                    "name": log.actor.get_full_name() if log.actor else "System"
+                },
+                "created_at": log.created_at
+            })
+
         # Serialize leads
-        data = [self.serialize_lead(lead, quotation_map) for lead in leads]
+        data = [self.serialize_lead(lead, quotation_map, logs_by_lead) for lead in leads]
 
         return JsonResponse({"data": data}, status=200, safe=False)
 
     @staticmethod
-    def serialize_lead(lead, quotation_map):
+    def serialize_lead(lead, quotation_map, logs_by_lead):
         customer = lead.customer
         assigned_to = lead.assigned_to
 
@@ -242,6 +266,7 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
             "created_at": lead.created_at,
             "updated_at": lead.updated_at,
             "created_by": lead.created_by.get_full_name() if lead.created_by else None,
+            "activity_logs": logs_by_lead.get(lead.id, [])[:10],  # Latest 10 activities
         }
 
 
@@ -329,6 +354,12 @@ class LeadCreateView(JWTAuthMixin, BaseAPIView):
 class LeadDetailView(AdminRequiredMixin, BaseAPIView):
     def get(self, request, lead_id):
         lead = get_object_or_404(Lead, pk=lead_id)
+        ActivityLog.log(
+            actor=request.user,
+            action=ActivityAction.LEAD_UPDATED,
+            entity=lead,
+            message=lead.status
+        )
         return JsonResponse({
             'data': {
                 'id': lead.id,
@@ -412,6 +443,30 @@ class QuotationListView(JWTAuthMixin,BaseAPIView):
         if user.role == 'SALESPERSON':
             quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
 
+        # Get activity logs for all quotations
+        quotation_ids = quotations.values_list('id', flat=True)
+        activity_logs = ActivityLog.objects.filter(
+            entity_type='Quotation',
+            entity_id__in=[str(qid) for qid in quotation_ids]
+        ).select_related('actor').order_by('-created_at')
+        
+        # Group logs by entity_id
+        logs_by_quotation = {}
+        for log in activity_logs:
+            quotation_id = int(log.entity_id)
+            if quotation_id not in logs_by_quotation:
+                logs_by_quotation[quotation_id] = []
+            logs_by_quotation[quotation_id].append({
+                'id': log.id,
+                'action': log.action,
+                'message': log.message,
+                'actor': {
+                    'id': log.actor.id if log.actor else None,
+                    'name': log.actor.get_full_name() if log.actor else 'System'
+                },
+                'created_at': log.created_at
+            })
+
         data = []
         for quotation in quotations:
             data.append({
@@ -446,6 +501,7 @@ class QuotationListView(JWTAuthMixin,BaseAPIView):
                         'name' : item.product.name,
                         'selling_price': float(item.selling_price),
                         'quantity': item.quantity,
+                        'percentage_discount': float(item.discount) if item.discount else 0.0,
                         'description': item.product.description if hasattr(item.product, 'description') else '',
                     } for item in quotation.details.all() 
                 ],
@@ -456,6 +512,7 @@ class QuotationListView(JWTAuthMixin,BaseAPIView):
                 'created_at': quotation.created_at,
                 'emailed_at': quotation.emailed_at,
                 'follow_up_date': quotation.follow_up_date,
+                'activity_logs': logs_by_quotation.get(quotation.id, [])[:10]  # Latest 10 activities
             })
         return JsonResponse({'data': data})
         
@@ -484,50 +541,41 @@ class QuotationPDFView(BaseAPIView):
             }, status=500)
 
 
-class QuotationDetailView( BaseAPIView):  # FIXED: Changed from LoginRequiredMixin
+class QuotationDetailView(BaseAPIView):
     def get(self, request, quotation_id):
-        quotation = get_object_or_404(Quotation, pk=quotation_id)
-        
-        # Check permission
-        # if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
-        #     return JsonResponse({'error': 'Permission denied'}, status=403)
-        
-        
-        return JsonResponse({
-            'data': {
-                'id': quotation.id,
-                'quotation_number': quotation.quotation_number,
-                'status': quotation.status,
-                'subtotal': float(quotation.subtotal),
-                'total': float(quotation.total),
-                'customer': {
-                    'id': quotation.customer.id,
-                    'name': quotation.customer.name,
-                    'email': quotation.customer.email,
-                    'phone': quotation.customer.phone,
-                    'primary_address': quotation.customer.primary_address,
-                    'company_name': quotation.customer.company_name
-                },
-                'assigned_to': {
-                    'id': quotation.assigned_to.id if quotation.assigned_to else None,
-                    'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
-                },
-                'created_at': quotation.created_at,
-                'emailed_at': quotation.emailed_at,
-            }
-        })
+        """
+        Fetches the complete details of a single quotation, including items and terms.
+        """
+        try:
+            quotation = get_object_or_404(
+                Quotation.objects.prefetch_related('details__product', 'terms'), 
+                pk=quotation_id
+            )
+            
+            lead = Lead.objects.filter(quotation_id=quotation.id).first()
+            
+            response_data = get_quotation_response_data(quotation, lead)
+            
+            return JsonResponse({
+                'success': True,
+                'data': response_data
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
     def delete(self, request, quotation_id):
+
         quotation = get_object_or_404(Quotation, pk=quotation_id)
         
-        # Check permission
-        if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
-            return JsonResponse({'error': 'Permission denied'}, status=403)
+        if hasattr(request.user, 'role') and request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
+            return JsonResponse({'success': False, 'error': 'You do not have permission to delete this quotation.'}, status=403)
         
+        quotation_number = quotation.quotation_number
         quotation.delete()
+        
         return JsonResponse({
             'success': True,
-            'message': "Quotation deleted successfully"
+            'message': f"Quotation {quotation_number} deleted successfully."
         })
 
 
