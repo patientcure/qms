@@ -431,7 +431,8 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
             }
         })
 #region Quotations
-class QuotationListView(JWTAuthMixin,BaseAPIView):
+
+class QuotationListView(JWTAuthMixin, BaseAPIView):
     def get(self, request):
         user = request.user
         quotations = Quotation.objects.select_related(
@@ -440,10 +441,11 @@ class QuotationListView(JWTAuthMixin,BaseAPIView):
             'terms', 'details__product'
         )
 
+        quotations = quotations.exclude(Q(file_url__isnull=True) | Q(file_url=''))
         if user.role == 'SALESPERSON':
             quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
 
-        # Get activity logs for all quotations
+        # Get activity logs for the filtered quotations
         quotation_ids = quotations.values_list('id', flat=True)
         activity_logs = ActivityLog.objects.filter(
             entity_type='Quotation',
@@ -514,8 +516,8 @@ class QuotationListView(JWTAuthMixin,BaseAPIView):
                 'follow_up_date': quotation.follow_up_date,
                 'activity_logs': logs_by_quotation.get(quotation.id, [])[:10]  # Latest 10 activities
             })
-        return JsonResponse({'data': data})
-        
+        return JsonResponse({'data': data}) 
+       
 class QuotationPDFView(BaseAPIView):
     def get(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
@@ -525,7 +527,7 @@ class QuotationPDFView(BaseAPIView):
         #     return JsonResponse({'error': 'Permission denied'}, status=403)
         
         try:
-            pdf_path, pdf_url = save_quotation_pdf(quotation, request)
+            pdf_url = save_quotation_pdf(quotation, request)
             
             return JsonResponse({
                 'success': True,
@@ -566,10 +568,7 @@ class QuotationDetailView(BaseAPIView):
     def delete(self, request, quotation_id):
 
         quotation = get_object_or_404(Quotation, pk=quotation_id)
-        
-        if hasattr(request.user, 'role') and request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
-            return JsonResponse({'success': False, 'error': 'You do not have permission to delete this quotation.'}, status=403)
-        
+
         quotation_number = quotation.quotation_number
         quotation.delete()
         
@@ -699,11 +698,13 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
 class AllCustomerListView( BaseAPIView):
     def get(self, request):
         customers = Customer.objects.prefetch_related(
-            Prefetch('leads')
+            Prefetch('leads'),
+            Prefetch('quotations')
         )
         data = []
         for customer in customers:
             leads = []
+            quotations = []
             for lead in customer.leads.all():
                 file_url = None
                 if lead.quotation_id:
@@ -724,7 +725,16 @@ class AllCustomerListView( BaseAPIView):
                     },
                     'created_at': lead.created_at,
                 })
-
+            
+            for quotation in customer.quotations.all():
+                quotations.append({
+                    'id': quotation.id,
+                    'quotation_number': quotation.quotation_number,
+                    'status': quotation.status,
+                    'file_url': quotation.file_url,
+                    'total': float(quotation.total),
+                    'created_at': quotation.created_at,
+                })
             data.append({
                 'id': customer.id,
                 'name': customer.name,
@@ -739,6 +749,7 @@ class AllCustomerListView( BaseAPIView):
                 'phone': customer.phone,
                 'created_at': customer.created_at,
                 'leads': leads,
+                'quotations': quotations,
             })
 
         return JsonResponse({'data': data}, safe=False)

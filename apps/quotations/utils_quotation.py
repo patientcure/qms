@@ -166,7 +166,9 @@ def get_quotation_response_data(quotation, lead, term_ids=None):
                 'id': quotation.customer.id, 
                 'name': quotation.customer.name, 
                 'email': quotation.customer.email, 
-                'phone': quotation.customer.phone
+                'phone': quotation.customer.phone,
+                'company_name': quotation.customer.company_name,
+                'primary_address': quotation.customer.primary_address,
             },
             'assigned_to': {
                 'id': quotation.assigned_to.id, 
