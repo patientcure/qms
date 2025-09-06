@@ -1,77 +1,91 @@
 # apps/quotations/email_service.py
 import logging
-from django.core.mail import send_mail
+from urllib.request import urlopen
+
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.utils import timezone
-from .models import EmailLog, EmailTemplate, Quotation
+
+from .models import EmailLog, Quotation
+from .email_template import mytemplate
 
 logger = logging.getLogger(__name__)
 
-def send_quotation_email(quotation: Quotation):
-    """
-    A centralized service to send a quotation email to a customer.
 
-    This function handles:
-    - Finding the correct email template.
-    - Replacing placeholders in the template with actual data.
-    - Logging the email attempt.
-    - Sending the email with the PDF link.
-    - Updating the quotation and log status on success or failure.
-    """
+def send_quotation_email(quotation: Quotation):
     if not (quotation and quotation.customer and quotation.customer.email):
-        logger.warning(f"Quotation {quotation.id} cannot be sent: Missing customer or customer email.")
+        logger.warning(
+            f"[Quotation {getattr(quotation, 'id', 'N/A')}] Missing customer or customer email."
+        )
         return False, "Missing customer or customer email."
 
-    # --- Create an initial log entry ---
+    # --- Create initial log entry ---
     log_entry = EmailLog.objects.create(
         to_email=quotation.customer.email,
         subject=f"Quotation {quotation.quotation_number}",
         quotation=quotation,
-        status='QUEUED'
+        status="QUEUED",
     )
 
     try:
-        template = quotation.email_template or EmailTemplate.objects.filter(is_default=True).first()
-        if not template:
-            raise ValueError("No default email template found.")
-        subject = template.subject.replace("{{quotation_number}}", quotation.quotation_number)
-        
-        body = template.body_html
-        replacements = {
-            "{{customer_name}}": quotation.customer.name,
-            "{{quotation_number}}": quotation.quotation_number,
-            "{{total_amount}}": f"{quotation.currency} {quotation.total:,.2f}",
-            "{{pdf_link}}": f'<a href="{quotation.file_url}" target="_blank">Download Quotation PDF</a>'
-        }
-        for placeholder, value in replacements.items():
-            body = body.replace(placeholder, value)
+        # --- Generate professional template ---
+        subject, plain_text, html_content = mytemplate(quotation)
 
         log_entry.subject = subject
-        log_entry.body_preview = body[:500] # Save a preview
-        
-        # --- Send the Email ---
-        send_mail(
+        log_entry.body_preview = plain_text[:500]
+
+        # --- Build email with plain + HTML ---
+        email = EmailMultiAlternatives(
             subject=subject,
-            message="",  # Plain text version (optional)
-            html_message=body,
+            body=plain_text,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[quotation.customer.email],
-            fail_silently=False,
+            to=[quotation.customer.email],
         )
 
-        # --- Update Status on Success ---
-        quotation.status = 'SENT'
+        try:
+            email.attach_alternative(html_content, "text/html")
+        except Exception as e:
+            logger.error(
+                f"[Quotation {quotation.quotation_number}] Failed to attach HTML body: {e}"
+            )
+            # fallback: plain text only
+            pass
+
+        # --- Attach PDF ---
+        if quotation.has_pdf and quotation.file_url:
+            try:
+                pdf_content = urlopen(quotation.file_url).read()
+                email.attach(
+                    f"Quotation_{quotation.quotation_number}.pdf",
+                    pdf_content,
+                    "application/pdf",
+                )
+            except Exception as e:
+                logger.error(
+                    f"[Quotation {quotation.quotation_number}] Failed to fetch/attach PDF: {e}"
+                )
+                # Do not block sending — just skip PDF
+
+        # --- Send email ---
+        email.send(fail_silently=False)
+
+        # --- Update quotation status ---
+        quotation.status = "SENT"
         quotation.emailed_at = timezone.now()
-        quotation.save(update_fields=['status', 'emailed_at'])
-        
-        log_entry.mark_sent("Django-Mail") # Using a generic provider ID
-        
-        logger.info(f"Successfully sent quotation {quotation.quotation_number} to {quotation.customer.email}")
+        quotation.save(update_fields=["status", "emailed_at"])
+
+        log_entry.mark_sent("Django-Mail")
+
+        logger.info(
+            f"[Quotation {quotation.quotation_number}] Sent successfully to {quotation.customer.email}"
+        )
         return True, "Email sent successfully."
 
     except Exception as e:
-        # --- Update Status on Failure ---
         error_message = f"Failed to send email: {str(e)}"
-        logger.error(f"Error sending quotation {quotation.id}: {error_message}", exc_info=True)
+        logger.error(
+            f"[Quotation {getattr(quotation, 'quotation_number', 'N/A')}] {error_message}",
+            exc_info=True,
+        )
         log_entry.mark_failed(error_message)
         return False, error_message

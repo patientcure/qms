@@ -109,7 +109,8 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                 'assigned_to', 'email_template', 'discount', 'follow_up_date', 
                 'status', 'discount_type', 'tax_rate', 'customer'
             ])
-
+            quotation.status = 'REVISED'
+            quotation.save(update_fields=['status'])
             if valid_term_ids is not None:
                 quotation.terms.set(valid_term_ids)
 
