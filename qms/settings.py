@@ -23,8 +23,10 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = str(os.getenv('DEBUG', 'False')).lower() == 'true'
 
 # Update this for your production domains
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
-
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,https://qms-3lra.vercel.app').split(',')
+CORS_ALLOWED_ORIGINS = [
+    'https://qms-3lra.vercel.app',
+]
 
 # --- Application Definitions ---
 # --------------------------------------------------------------------------
@@ -41,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'widget_tweaks',
+    'corsheaders',
     
     # Your Apps
     'apps.accounts',
@@ -51,8 +54,8 @@ INSTALLED_APPS = [
 # --- Middleware ---
 # --------------------------------------------------------------------------
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # Place it high, especially before CommonMiddleware
     'whitenoise.middleware.WhiteNoiseMiddleware', # WhiteNoise middleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
