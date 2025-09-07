@@ -40,7 +40,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'widget_tweaks',
-    'corsheaders',
     
     # Your Apps
     'apps.accounts',
