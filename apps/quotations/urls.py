@@ -7,9 +7,7 @@ from .terms_views import (
     TermDeleteView,
     TermUpdateView
 )
-from .quotation_create_view import(
-    QuotationCreateView
-)
+from .duplicate import DuplicateQuotationAPIView
 from .quotation_create import QuotationCreate
 from .merge_pdf import MergePDFsAPIView
 from .views import (
@@ -76,6 +74,7 @@ urlpatterns = [
     path('api/quotations/<int:quotation_id>/send/', QuotationSendView.as_view(), name='quotation_send'),
     path('api/quotations/<int:quotation_id>/assign/', QuotationAssignView.as_view(), name='quotation_assign'),
     path('api/quotations/<int:quotation_id>/pdf/', QuotationPDFView.as_view(), name='quotation_pdf'),
+    path('api/quotations/<int:pk>/duplicate/', DuplicateQuotationAPIView.as_view(), name='quotation_duplicate'),
     
     # ========== Product Management API ==========
     path('api/products/', ProductListView.as_view(), name='product_list'),

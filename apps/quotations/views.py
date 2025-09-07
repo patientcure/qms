@@ -697,38 +697,44 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
     
 class AllCustomerListView(BaseAPIView):
     def get(self, request):
-        # 1. Start with an optimized queryset, prefetching all necessary related data
-        #    to prevent N+1 query issues.
-        customers = Customer.objects.prefetch_related(
-            'leads__assigned_to', 
-            'quotations__assigned_to',
-            'quotations__details__product',  # Prefetch quotation items and their products
-            'quotations__terms' 
-        ).order_by('-created_at')
+        user = getattr(request, "user", None)
+        # If user is SALESPERSON, filter leads/quotations by created_by or assigned_to
+        if user and getattr(user, "role", None) == Roles.SALESPERSON:
+            leads_qs = Lead.objects.filter(Q(assigned_to=user) | Q(created_by=user))
+            quotations_qs = Quotation.objects.filter(Q(assigned_to=user))
+            customers = Customer.objects.prefetch_related(
+                Prefetch('leads', queryset=leads_qs, to_attr='filtered_leads'),
+                Prefetch('quotations', queryset=quotations_qs, to_attr='filtered_quotations'),
+                'filtered_leads__assigned_to',
+                'filtered_quotations__assigned_to',
+                'filtered_quotations__details__product',
+                'filtered_quotations__terms'
+            ).order_by('-created_at')
+        else:
+            customers = Customer.objects.prefetch_related(
+                'leads__assigned_to', 
+                'quotations__assigned_to',
+                'quotations__details__product',
+                'quotations__terms'
+            ).order_by('-created_at')
 
-        # 2. Collect all unique IDs for leads and quotations in bulk.
         all_lead_ids = set()
         all_quotation_ids = set()
-        
         for customer in customers:
-            for lead in customer.leads.all():
+            leads = getattr(customer, 'filtered_leads', customer.leads.all())
+            quotations = getattr(customer, 'filtered_quotations', customer.quotations.all())
+            for lead in leads:
                 all_lead_ids.add(lead.id)
                 if lead.quotation_id:
                     all_quotation_ids.add(lead.quotation_id)
-            
-            for quotation in customer.quotations.all():
+            for quotation in quotations:
                 all_quotation_ids.add(quotation.id)
 
-        # 3. Fetch all related data in single, efficient queries.
-        
-        # Create a map of {quotation_id: file_url} for quick lookup.
         quotations_map = {
             q.id: q.file_url 
             for q in Quotation.objects.filter(id__in=all_quotation_ids).only('id', 'file_url')
         }
 
-        # Fetch and group activity logs for both Leads and Quotations.
-        # LEAD logs
         lead_activity_logs = ActivityLog.objects.filter(
             entity_type='Lead',
             entity_id__in=[str(lid) for lid in all_lead_ids]
@@ -745,7 +751,6 @@ class AllCustomerListView(BaseAPIView):
                 'created_at': log.created_at
             })
 
-        # QUOTATION logs
         quotation_activity_logs = ActivityLog.objects.filter(
             entity_type='Quotation',
             entity_id__in=[str(qid) for qid in all_quotation_ids]
@@ -762,12 +767,12 @@ class AllCustomerListView(BaseAPIView):
                 'created_at': log.created_at
             })
 
-        # 4. Build the final JSON response with all data readily available.
         data = []
         for customer in customers:
-            # Serialize leads for the current customer
+            leads = getattr(customer, 'filtered_leads', customer.leads.all())
+            quotations = getattr(customer, 'filtered_quotations', customer.quotations.all())
             leads_data = []
-            for lead in customer.leads.all():
+            for lead in leads:
                 leads_data.append({
                     'id': lead.id,
                     'status': lead.status,
@@ -779,15 +784,12 @@ class AllCustomerListView(BaseAPIView):
                         'name': lead.assigned_to.get_full_name() if lead.assigned_to else None,
                     },
                     'created_at': lead.created_at,
-                    'activity_logs': logs_by_lead.get(lead.id, [])[:10] # Added activity logs
+                    'activity_logs': logs_by_lead.get(lead.id, [])[:10]
                 })
-
-            # Serialize quotations for the current customer
             quotations_data = []
-            for quotation in customer.quotations.all():
+            for quotation in quotations:
                 if not quotation.file_url:
                     continue
-
                 quotations_data.append({
                     'id': quotation.id,
                     'quotation_number': quotation.quotation_number,
@@ -798,11 +800,11 @@ class AllCustomerListView(BaseAPIView):
                     'subtotal': float(quotation.subtotal),
                     'tax_rate': float(quotation.tax_rate), 
                     'total': float(quotation.total),
-                    'terms': [ # Added terms
+                    'terms': [
                         {'id': term.id, 'title': term.title}
                         for term in quotation.terms.all()
                     ],   
-                    'items':[ # Added items (products)
+                    'items':[
                         {
                             'id': item.id,
                             'product_id': item.product.id,
@@ -822,8 +824,6 @@ class AllCustomerListView(BaseAPIView):
                     'follow_up_date': quotation.follow_up_date,
                     'activity_logs': logs_by_quotation.get(quotation.id, [])[:10]
                 })
-            
-            # Combine all data for the customer
             data.append({
                 'id': customer.id,
                 'name': customer.name,
@@ -840,7 +840,6 @@ class AllCustomerListView(BaseAPIView):
                 'leads': leads_data,
                 'quotations': quotations_data,
             })
-
         return JsonResponse({'data': data})
     
 class CustomerCreateView( BaseAPIView):
