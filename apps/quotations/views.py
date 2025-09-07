@@ -697,58 +697,72 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
     
 class AllCustomerListView(BaseAPIView):
     def get(self, request):
-        # 1. Start with an optimized queryset for customers, prefetching related leads and quotations.
+        # 1. Start with an optimized queryset, prefetching all necessary related data
+        #    to prevent N+1 query issues.
         customers = Customer.objects.prefetch_related(
             'leads__assigned_to', 
-            'quotations__assigned_to'
+            'quotations__assigned_to',
+            'quotations__details__product',  # Prefetch quotation items and their products
+            'quotations__terms' 
         ).order_by('-created_at')
 
-        # 2. Collect all unique quotation IDs from both leads and direct customer relations
-        #    to fetch their data and logs in bulk.
+        # 2. Collect all unique IDs for leads and quotations in bulk.
+        all_lead_ids = set()
         all_quotation_ids = set()
-        lead_quotation_ids = set()
         
         for customer in customers:
             for lead in customer.leads.all():
+                all_lead_ids.add(lead.id)
                 if lead.quotation_id:
-                    lead_quotation_ids.add(lead.quotation_id)
+                    all_quotation_ids.add(lead.quotation_id)
             
             for quotation in customer.quotations.all():
                 all_quotation_ids.add(quotation.id)
-        
-        all_quotation_ids.update(lead_quotation_ids)
 
-        # 3. Fetch all related data in single, efficient queries to avoid N+1 problems.
+        # 3. Fetch all related data in single, efficient queries.
         
-        # Create a map of {quotation_id: file_url} for quick lookup for leads.
-        lead_quotations_map = {
+        # Create a map of {quotation_id: file_url} for quick lookup.
+        quotations_map = {
             q.id: q.file_url 
-            for q in Quotation.objects.filter(id__in=lead_quotation_ids).only('id', 'file_url')
+            for q in Quotation.objects.filter(id__in=all_quotation_ids).only('id', 'file_url')
         }
 
-        # Fetch and group all necessary activity logs by quotation ID.
-        activity_logs = ActivityLog.objects.filter(
+        # Fetch and group activity logs for both Leads and Quotations.
+        # LEAD logs
+        lead_activity_logs = ActivityLog.objects.filter(
+            entity_type='Lead',
+            entity_id__in=[str(lid) for lid in all_lead_ids]
+        ).select_related('actor').order_by('-created_at')
+
+        logs_by_lead = {}
+        for log in lead_activity_logs:
+            lead_id = int(log.entity_id)
+            if lead_id not in logs_by_lead:
+                logs_by_lead[lead_id] = []
+            logs_by_lead[lead_id].append({
+                'id': log.id, 'action': log.action, 'message': log.message,
+                'actor': {'id': log.actor.id if log.actor else None, 'name': log.actor.get_full_name() if log.actor else 'System'},
+                'created_at': log.created_at
+            })
+
+        # QUOTATION logs
+        quotation_activity_logs = ActivityLog.objects.filter(
             entity_type='Quotation',
             entity_id__in=[str(qid) for qid in all_quotation_ids]
         ).select_related('actor').order_by('-created_at')
 
         logs_by_quotation = {}
-        for log in activity_logs:
+        for log in quotation_activity_logs:
             quotation_id = int(log.entity_id)
             if quotation_id not in logs_by_quotation:
                 logs_by_quotation[quotation_id] = []
             logs_by_quotation[quotation_id].append({
-                'id': log.id,
-                'action': log.action,
-                'message': log.message,
-                'actor': {
-                    'id': log.actor.id if log.actor else None,
-                    'name': log.actor.get_full_name() if log.actor else 'System'
-                },
+                'id': log.id, 'action': log.action, 'message': log.message,
+                'actor': {'id': log.actor.id if log.actor else None, 'name': log.actor.get_full_name() if log.actor else 'System'},
                 'created_at': log.created_at
             })
 
-        # 4. Now, build the final JSON response with all data readily available.
+        # 4. Build the final JSON response with all data readily available.
         data = []
         for customer in customers:
             # Serialize leads for the current customer
@@ -758,19 +772,19 @@ class AllCustomerListView(BaseAPIView):
                     'id': lead.id,
                     'status': lead.status,
                     'lead_source': lead.lead_source,
-                    'file_url': lead_quotations_map.get(lead.quotation_id), # Efficient lookup
+                    'file_url': quotations_map.get(lead.quotation_id),
                     'quotation_id': lead.quotation_id,
                     'assigned_to': {
                         'id': lead.assigned_to.id if lead.assigned_to else None,
                         'name': lead.assigned_to.get_full_name() if lead.assigned_to else None,
                     },
                     'created_at': lead.created_at,
+                    'activity_logs': logs_by_lead.get(lead.id, [])[:10] # Added activity logs
                 })
 
             # Serialize quotations for the current customer
             quotations_data = []
             for quotation in customer.quotations.all():
-                # Skip quotations without a file_url as requested
                 if not quotation.file_url:
                     continue
 
@@ -784,6 +798,21 @@ class AllCustomerListView(BaseAPIView):
                     'subtotal': float(quotation.subtotal),
                     'tax_rate': float(quotation.tax_rate), 
                     'total': float(quotation.total),
+                    'terms': [ # Added terms
+                        {'id': term.id, 'title': term.title}
+                        for term in quotation.terms.all()
+                    ],   
+                    'items':[ # Added items (products)
+                        {
+                            'id': item.id,
+                            'product_id': item.product.id,
+                            'name' : item.product.name,
+                            'selling_price': float(item.selling_price),
+                            'quantity': item.quantity,
+                            'percentage_discount': float(item.discount) if item.discount else 0.0,
+                            'description': item.product.description if hasattr(item.product, 'description') else '',
+                        } for item in quotation.details.all() 
+                    ],
                     'assigned_to': {
                         'id': quotation.assigned_to.id if quotation.assigned_to else None,
                         'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
@@ -791,7 +820,7 @@ class AllCustomerListView(BaseAPIView):
                     'created_at': quotation.created_at,
                     'emailed_at': quotation.emailed_at,
                     'follow_up_date': quotation.follow_up_date,
-                    'activity_logs': logs_by_quotation.get(quotation.id, [])[:10] # Efficient lookup
+                    'activity_logs': logs_by_quotation.get(quotation.id, [])[:10]
                 })
             
             # Combine all data for the customer
@@ -813,7 +842,7 @@ class AllCustomerListView(BaseAPIView):
             })
 
         return JsonResponse({'data': data})
-
+    
 class CustomerCreateView( BaseAPIView):
 
     def _parse_request_data(self, request):
