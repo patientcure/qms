@@ -14,7 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from apps.accounts.models import User,Roles
-from apps.quotations.views import JWTAuthMixin
+from apps.quotations.views import JWTAuthMixin,AdminRequiredMixin
 class ProtectedView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -388,3 +388,28 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                 'error': str(e),
                 'traceback': traceback.format_exc()
             }, status=500)
+
+
+class ToggleUserType(AdminRequiredMixin, BaseAPIView):
+    def post(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id)
+        if user.role == "ADMIN":
+            user.role = "SALESPERSON"
+        elif user.role == "SALESPERSON":
+            user.role = "ADMIN"
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Only ADMIN and SALESPERSON roles can be toggled.'
+            }, status=400)
+        user.save(update_fields=['role'])
+        return JsonResponse({
+            'success': True,
+            'message': f'User role toggled to {user.role}',
+            'data': {
+                'id': user.id,
+                'username': user.first_name,
+                'role': user.role
+            }
+        })
+    

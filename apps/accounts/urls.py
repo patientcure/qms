@@ -8,7 +8,8 @@ from .views import (
     QuotationStatusUpdateView,
     LeadStatusUpdateView,
     UserListView,
-    DeleteUserView
+    DeleteUserView,
+    ToggleUserType
 )
 
 app_name = "accounts"
@@ -28,4 +29,7 @@ urlpatterns = [
     # ========== Status Update API ==========
     path("api/quotations/<int:quotation_id>/status/", QuotationStatusUpdateView.as_view(), name="update_quotation_status"),
     path("api/leads/<int:lead_id>/status/", LeadStatusUpdateView.as_view(), name="update_lead_status"),
+
+    path("api/<int:user_id>/toggleUser/",ToggleUserType.as_view(),name="toggle_user")
+
 ]

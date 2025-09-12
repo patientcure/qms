@@ -1224,3 +1224,35 @@ class SalespersonDashboardStatsView(SalespersonRequiredMixin, BaseAPIView):
             'open_leads': user.leads.exclude(status='CLOSED').count()
         }
         return JsonResponse({'data': stats})
+
+class UserStatsView(JWTAuthMixin, BaseAPIView):
+    def get(self, request, user_id=None):
+        # If user_id is not provided, use the authenticated user
+        if user_id:
+            user = get_object_or_404(User, pk=user_id)
+        else:
+            user = request.user
+
+        quotations = Quotation.objects.filter(created_by=user)
+        leads = Lead.objects.filter(created_by=user)
+        assigned_quotations = Quotation.objects.filter(assigned_to=user)
+        assigned_leads = Lead.objects.filter(assigned_to=user)
+        sent_quotations = quotations.filter(status=QuotationStatus.SENT)
+        closed_leads = leads.filter(status='QUALIFIED')
+        open_leads = leads.exclude(status='QUALIFIED')
+
+        stats = {
+            'user_id': user.id,
+            'name': user.get_full_name(),
+            'role': user.role,
+            'total_quotations_created': quotations.count(),
+            'total_leads_created': leads.count(),
+            'total_quotations_assigned': assigned_quotations.count(),
+            'total_leads_assigned': assigned_leads.count(),
+            'sent_quotations': sent_quotations.count(),
+            'open_leads': open_leads.count(),
+            'closed_leads': closed_leads.count(),
+            'last_login': user.last_login,
+            'date_joined': user.date_joined,
+        }
+        return JsonResponse({'data': stats})

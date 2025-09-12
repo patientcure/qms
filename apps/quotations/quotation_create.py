@@ -137,7 +137,8 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             logger.info(f"Quotation {quotation.quotation_number} updated successfully")
             
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
-            
+            lead.status = 'REVISED'
+            lead.save(update_fields=['status'])
             return JsonResponse({
                 "success": True,
                 "message": f"Quotation {quotation.quotation_number} updated successfully",

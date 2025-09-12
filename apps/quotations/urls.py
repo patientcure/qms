@@ -47,6 +47,7 @@ from .views import (
     # Product & Customer Search
     ProductSearchView,
     CustomerSearchView,
+    UserStatsView
     
     
 
@@ -107,4 +108,5 @@ urlpatterns = [
     path('api/terms/<int:id>/update/', TermUpdateView.as_view(), name='terms-update'),
     path('api/terms/<int:id>/delete/', TermDeleteView.as_view(), name='terms-delete'),
     path('api/merge/', MergePDFsAPIView.as_view(), name='merge_pdfs'),
+    path('api/<int:user_id>/stats/',UserStatsView.as_view(),name="user-stats")
 ]
