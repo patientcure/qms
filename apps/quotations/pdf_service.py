@@ -9,8 +9,10 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, ListFlowable, ListItem
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
-from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 from .models import TermsAndConditions as Term
+from django.contrib.staticfiles import finders
+
 
 class QuotationPDFGenerator:
     def __init__(self, quotation, items_data, company_profile=None, terms=None):
@@ -20,11 +22,13 @@ class QuotationPDFGenerator:
         self.terms = terms or []
         self.styles = getSampleStyleSheet()
         self.buffer = io.BytesIO()
+
+        # Margins adjusted for letterhead
         self.doc = SimpleDocTemplate(
             self.buffer,
             pagesize=A4,
             rightMargin=20 * mm, leftMargin=20 * mm,
-            topMargin=25 * mm, bottomMargin=25 * mm
+            topMargin=45 * mm, bottomMargin=45 * mm
         )
         self.primary_blue = colors.Color(37/255, 99/255, 235/255)
         self.light_gray = colors.Color(249/255, 250/255, 251/255)
@@ -32,6 +36,75 @@ class QuotationPDFGenerator:
         self.medium_gray = colors.Color(75/255, 85/255, 99/255)
         self.border_gray = colors.Color(209/255, 213/255, 219/255)
         self._define_styles()
+        self._setup_templates()
+
+    def _setup_templates(self):
+        from reportlab.platypus import Frame, PageTemplate
+        frame = Frame(self.doc.leftMargin, self.doc.bottomMargin,
+                     self.doc.width, self.doc.height,
+                     id='normal')
+        header_template = PageTemplate(id='WithHeader', frames=frame,
+                                      onPage=self._add_header_footer)
+        self.doc.addPageTemplates([header_template])
+
+    def _add_header_footer(self, canvas, doc):
+        canvas.saveState()
+        self._draw_header(canvas)
+        self._draw_footer(canvas)
+        canvas.restoreState()
+        self._add_page_number(canvas, doc)
+
+    def _draw_header(self, canvas):
+        godrej_path = finders.find("quotations/assets/godrej.jpeg")
+        godrej_logo = ImageReader(godrej_path)
+        canvas.drawImage(godrej_logo, A4[0] - 55*mm, A4[1] - 25*mm,
+                         width=40*mm, height=15*mm, preserveAspectRatio=True, mask='auto')
+
+        # Company name & contact
+        canvas.setFont("Helvetica-Bold", 14)
+        canvas.setFillColor(colors.black)
+        canvas.drawString(20*mm, A4[1] - 20*mm, "N.K. Prosales Private Limited")
+
+        canvas.setFont("Helvetica", 9)
+        canvas.drawString(20*mm, A4[1] - 26*mm, "39/1, Acharya puri, Gurgaon-122001")
+        canvas.drawString(20*mm, A4[1] - 32*mm, "Ph-0124 - 2306638, Email: neelamgt2004@yahoo.co.in")
+
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(20*mm, A4[1] - 38*mm,
+            "Wholesale Dealer of: GODREJ & Boyce Mfg. Co. Ltd., Carysil, Eureka Forbes")
+
+        # Separator line under header
+        canvas.setStrokeColor(self.border_gray)
+        canvas.setLineWidth(0.5)
+        canvas.line(0, A4[1] - 42*mm, A4[0], A4[1] - 42*mm)
+
+    def _draw_footer(self, canvas):
+        # Separator line above footer
+        canvas.setStrokeColor(self.border_gray)
+        canvas.setLineWidth(0.5)
+        canvas.line(0, 35*mm, A4[0], 35*mm)
+
+        # Logos
+        eureka_path = finders.find("quotations/assets/eureka.jpeg")
+        carysil_path = finders.find("quotations/assets/carysil.jpeg")
+
+        eureka_logo = ImageReader(eureka_path)
+        carysil_logo = ImageReader(carysil_path)
+
+        canvas.drawImage(eureka_logo, 70*mm, 20*mm, width=25*mm, height=10*mm,
+                         preserveAspectRatio=True, mask='auto')
+        canvas.drawImage(carysil_logo, 110*mm, 20*mm, width=25*mm, height=10*mm,
+                         preserveAspectRatio=True, mask='auto')
+
+        # Product info
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.black)
+        canvas.drawCentredString(A4[0]/2, 14*mm,
+            "Godrej: Modular Office Furniture Systems and Storage Products • Physical Electronics & Premises Security Equipment • Optimiser • Heavy Duty Indl. Rack.")
+        canvas.drawCentredString(A4[0]/2, 9*mm,
+            "Eureka Forbes: Commercial & Industrial Products • Vacuum Cleaner • Scrubber Drier • Sweeper • High Jet Pressure • Water Cooler.")
+        canvas.drawCentredString(A4[0]/2, 4*mm,
+            "Carysil: Sinks • Faucet • Chimney • Hobs etc.")
 
     def _to_decimal(self, value, precision='0.01'):
         if value is None: return Decimal('0')
@@ -44,17 +117,26 @@ class QuotationPDFGenerator:
         return f"Rs. {value:,.2f}"
 
     def _define_styles(self):
-        self.title_style = ParagraphStyle('Title', parent=self.styles['Heading1'], fontSize=24, fontName='Helvetica-Bold', spaceAfter=20, alignment=TA_LEFT, textColor=colors.Color(17/255, 24/255, 39/255))
-        self.company_name_style = ParagraphStyle('CompanyName', parent=self.styles['Heading1'], fontSize=20, fontName='Helvetica-Bold', spaceAfter=8, alignment=TA_RIGHT, textColor=self.primary_blue)
-        self.section_heading_style = ParagraphStyle('SectionHeading', parent=self.styles['Heading2'], fontSize=14, fontName='Helvetica-Bold', spaceAfter=12, spaceBefore=16, textColor=colors.Color(17/255, 24/255, 39/255))
-        self.normal_style = ParagraphStyle('Normal', parent=self.styles['Normal'], fontSize=10, textColor=self.dark_gray, leading=14)
-        self.right_style = ParagraphStyle('Right', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, textColor=self.dark_gray)
-        self.small_text_style = ParagraphStyle('SmallText', parent=self.styles['Normal'], fontSize=9, textColor=self.medium_gray, alignment=TA_RIGHT, leading=12)
-        self.terms_heading_style = ParagraphStyle('TermsHeading', parent=self.styles['Heading3'], fontSize=11, fontName='Helvetica-Bold', spaceAfter=6, spaceBefore=6, textColor=colors.Color(17/255, 24/255, 39/255))
-        self.terms_content_style = ParagraphStyle('TermsContent', parent=self.styles['Normal'], fontSize=9, spaceAfter=6, textColor=self.dark_gray, leading=12)
-        self.footer_style = ParagraphStyle('Footer', parent=self.styles['Normal'], fontSize=8, alignment=TA_CENTER, textColor=self.medium_gray)
-
+        self.title_style = ParagraphStyle('Title', parent=self.styles['Heading1'], fontSize=24,
+            fontName='Helvetica-Bold', spaceAfter=20, alignment=TA_LEFT, textColor=colors.black)
+        self.company_name_style = ParagraphStyle('CompanyName', parent=self.styles['Heading1'], fontSize=20,
+            fontName='Helvetica-Bold', spaceAfter=8, alignment=TA_RIGHT, textColor=self.primary_blue)
+        self.section_heading_style = ParagraphStyle('SectionHeading', parent=self.styles['Heading2'], fontSize=14,
+            fontName='Helvetica-Bold', spaceAfter=12, spaceBefore=16, textColor=colors.black)
+        self.normal_style = ParagraphStyle('Normal', parent=self.styles['Normal'], fontSize=10,
+            textColor=self.dark_gray, leading=14)
+        self.right_style = ParagraphStyle('Right', parent=self.styles['Normal'], fontSize=10,
+            alignment=TA_RIGHT, textColor=self.dark_gray)
+        self.small_text_style = ParagraphStyle('SmallText', parent=self.styles['Normal'], fontSize=9,
+            textColor=self.medium_gray, alignment=TA_RIGHT, leading=12)
+        self.terms_heading_style = ParagraphStyle('TermsHeading', parent=self.styles['Heading3'], fontSize=11,
+            fontName='Helvetica-Bold', spaceAfter=6, spaceBefore=6, textColor=colors.black)
+        self.terms_content_style = ParagraphStyle('TermsContent', parent=self.styles['Normal'], fontSize=9,
+            spaceAfter=6, textColor=self.dark_gray, leading=12)
+        self.footer_style = ParagraphStyle('Footer', parent=self.styles['Normal'], fontSize=8,
+            alignment=TA_CENTER, textColor=self.medium_gray)
     def _build_company_header(self):
+        # This is now simplified since the main header is handled by the page template
         left_content = [Paragraph("QUOTATION", self.title_style)]
         quotation_info = f"<b>Quotation No:</b> {self.quotation.quotation_number}<br/><b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}<br/>"
         if self.quotation.follow_up_date:
@@ -63,11 +145,11 @@ class QuotationPDFGenerator:
         
         right_content = []
         if self.company:
-            right_content.append(Paragraph(self.company.name or "Your Company", self.company_name_style))
-            company_details = f"{self.company.address or ''}<br/>Phone: {self.company.phone or ''}<br/>Email: {self.company.email or ''}<br/>GST: {self.company.gst_number or ''}"
+            # We'll keep this as a fallback but the main company info is in the header
+            company_details = f"GST: {self.company.gst_number or ''}"
             right_content.append(Paragraph(company_details, self.small_text_style))
         
-        header_table = Table([[left_content, right_content]], colWidths=[85 * mm, 85 * mm], style=[('VALIGN', (0, 0), (-1, -1), 'TOP')])
+        header_table = Table([[left_content, right_content]], colWidths=[120 * mm, 50 * mm], style=[('VALIGN', (0, 0), (-1, -1), 'TOP')])
         return [header_table, Spacer(1, 8 * mm)]
 
     def _build_customer_info(self):
@@ -221,15 +303,14 @@ class QuotationPDFGenerator:
 
     def _build_footer(self):
         footer_table = Table([[Paragraph("Thank you for your business!", self.normal_style), Paragraph("Digitally Signed <br/>Admin Authorized", self.right_style)]], colWidths=[85 * mm, 85 * mm])
-        footer_text = f"Generated on {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-        if self.company: footer_text += f" | {self.company.name}"
-        return [Spacer(1, 15 * mm), footer_table, Spacer(1, 10 * mm), Paragraph(footer_text, self.footer_style)]
+        return [Spacer(1, 15 * mm), footer_table]
 
     def _add_page_number(self, canvas_obj, doc):
         page_num = canvas_obj.getPageNumber()
         canvas_obj.setFont("Helvetica", 8)
         canvas_obj.setFillColor(self.medium_gray)
-        canvas_obj.drawRightString(200 * mm, 10 * mm, f"Page {page_num}")
+        # Position page number above the footer content
+        canvas_obj.drawRightString(200 * mm, 45 * mm, f"Page {page_num}")
 
     def generate(self):
         elements = []
