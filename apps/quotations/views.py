@@ -1028,6 +1028,7 @@ class ProductListView(BaseAPIView):
                 'is_available': product.is_available,
                 'active': product.active,
                 'brand': product.brand,
+                'dimensions' : product.dimensions,
                 'weight': float(product.weight) if product.weight else None,
                 'warranty_months': product.warranty_months,
                 'created_at': product.created_at
