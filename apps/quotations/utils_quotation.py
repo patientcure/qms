@@ -60,7 +60,7 @@ def log_quotation_changes(quotation, action, user, old_values=None, new_values=N
                 message += f". Changes: {', '.join(changes)}"
         else:
             message = f"Quotation {quotation.quotation_number} - {action}"
-        ActivityLog.log(actor=user, action=action, entity=quotation, message=message)
+        ActivityLog.log(actor=user, action=action, entity=quotation, message=message,customer = quotation.customer)
     except Exception as e:
         logger.error(f"Failed to log quotation activity: {str(e)}")
 

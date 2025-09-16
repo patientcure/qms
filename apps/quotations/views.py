@@ -313,7 +313,8 @@ class LeadCreateView(JWTAuthMixin, BaseAPIView):
                 actor=request.user,
                 action=ActivityAction.LEAD_CREATED,
                 entity=lead,
-                message="Created via API"
+                message="Created via API",
+                customer = quotation.customer,
             )
 
             # 9. Prepare response data
@@ -619,7 +620,8 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
             actor=request.user,
             action=ActivityAction.QUOTATION_ASSIGNED if assigned_to_id else ActivityAction.QUOTATION_UNASSIGNED,
             entity=quotation,
-            message=message
+            message=message,
+            customer = quotation.customer,
         )
         
         return JsonResponse({
@@ -928,6 +930,9 @@ class CustomerCreateView( BaseAPIView):
 class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
     def get(self, request, customer_id):
         customer = get_object_or_404(Customer, pk=customer_id)
+
+        logs = customer.activity_logs.select_related("actor").all()
+
         return JsonResponse({
             'data': {
                 'id': customer.id,
@@ -941,35 +946,25 @@ class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
                 'website': customer.website,
                 'primary_address': customer.primary_address,
                 'billing_address': customer.billing_address,
+                'logs': [
+                    {
+                        'id': log.id,
+                        'action': log.action,
+                        'actor': {
+                            'id': log.actor.id if log.actor else None,
+                            'name': log.actor.get_full_name() if log.actor else "System",
+                            'email': log.actor.email if log.actor else None,
+                        },
+                        'entity_type': log.entity_type,
+                        'entity_id': log.entity_id,
+                        'message': log.message,
+                        'created_at': log.created_at,
+                    }
+                    for log in logs
+                ]
             }
         })
 
-    def put(self, request, customer_id):
-        customer = get_object_or_404(Customer, pk=customer_id)
-        form_data = {**request.POST.dict(), **request.json}
-        form = CustomerForm(form_data, instance=customer)
-        
-        if form.is_valid():
-            customer = form.save()
-            return JsonResponse({
-                'success': True,
-                'message': 'Customer updated successfully',
-                'data': {
-                    'id': customer.id,
-                    'name': customer.name,
-                    'email': customer.email,
-                    'phone': customer.phone
-                }
-            })
-        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-
-    def delete(self, request, customer_id):
-        customer = get_object_or_404(Customer, pk=customer_id)
-        customer.delete()
-        return JsonResponse({
-            'success': True,
-            'message': 'Customer deleted successfully'
-        })
 
 class ProductSearchView(JWTAuthMixin, BaseAPIView):
     def get(self, request):

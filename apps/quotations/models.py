@@ -232,10 +232,11 @@ class EmailLog(TimestampedModel):
 
 class ActivityLog(TimestampedModel):
     actor = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='activity_logs')
+    customer = models.ForeignKey(Customer,on_delete=models.SET_NULL,null=True,blank=True,related_name='activity_logs')
     action = models.CharField(max_length=50, choices=ActivityAction.choices)
     entity_type = models.CharField(max_length=50)
     entity_id = models.CharField(max_length=50)
-    message = models.TextField(blank=True)
+    message = models.TextField(blank=True)  
 
     class Meta:
         indexes = [
@@ -249,11 +250,12 @@ class ActivityLog(TimestampedModel):
         return f"{self.action} on {self.entity_type}({self.entity_id})"
 
     @classmethod
-    def log(cls, actor, action, entity, message=''):
+    def log(cls, actor, action, entity, customer ,message=''):
         return cls.objects.create(
             actor=actor,
             action=action,
             entity_type=entity.__class__.__name__,
             entity_id=str(getattr(entity, 'id', '')),
             message=message,
+            customer = customer,
         )

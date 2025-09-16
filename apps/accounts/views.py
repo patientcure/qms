@@ -284,7 +284,8 @@ class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
                 actor=request.user,
                 action=ActivityAction.QUOTATION_UPDATED,
                 entity=quotation,
-                message=message
+                message=message,
+                customer=quotation.customer,
             )
             
             return JsonResponse({
@@ -357,7 +358,8 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                         actor=request.user,
                         action=ActivityAction.LEAD_UPDATED,
                         entity=lead,
-                        message="; ".join(changes)
+                        message="; ".join(changes),
+                        customer = lead.customer,
                     )
                 except Exception as e:
                     return JsonResponse({'success': False, 'error': f'Activity log failed: {str(e)}'}, status=500)

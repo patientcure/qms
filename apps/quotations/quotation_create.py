@@ -70,6 +70,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
         Handles updating an existing Quotation.
         """
         try:
+            user = request.user
             request_json = getattr(request, 'json', {})
             if not request_json:
                 return JsonResponse({"success": False, "error": "JSON data is required"}, status=400)
@@ -121,6 +122,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             quotation.subtotal = totals['subtotal']
             quotation.total = totals['total']
             quotation.save(update_fields=['subtotal', 'total'])
+            log_quotation_changes(quotation, ActivityAction.QUOTATION_UPDATED, user)
             pdf_url = None
             if items_data:
                 try:
@@ -232,7 +234,8 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                         actor=user, 
                         action=ActivityAction.QUOTATION_SENT, 
                         entity=quotation, 
-                        message=f"Quotation {quotation.quotation_number} sent immediately"
+                        message=f"Quotation {quotation.quotation_number} sent immediately",
+                        customer = customer,
                     )
                 except Exception as e:
                     logger.error(f"Failed to send email: {str(e)}")
