@@ -437,24 +437,14 @@ class QuotationPDFGenerator:
         return [item_table, Spacer(1, 8*mm)], calculated_totals
 
     def _build_totals(self, totals):
-        """Build totals section with proper discount calculation"""
+        """Build totals section with tax applied after discount"""
         subtotal = self._to_decimal(totals.get("subtotal", 0))
         total_item_discount = self._to_decimal(totals.get("total_item_discount", 0))
         
+        # Step 1: Apply item discounts
         subtotal_after_item_disc = subtotal - total_item_discount
 
-        # Calculate tax amount based on the subtotal after item discounts
-        tax_rate = self._to_decimal(getattr(self.quotation, 'tax_rate', 0))
-        tax_amount = Decimal('0.00')
-        tax_label = 'Tax:'
-        if tax_rate > 0:
-            tax_amount = subtotal_after_item_disc * (tax_rate / 100)
-            tax_label = f'Tax ({tax_rate}%):'
-        
-        # Calculate the total before applying the final discount
-        total_before_overall_discount = subtotal_after_item_disc + tax_amount
-        
-        # Calculate overall discount amount
+        # Step 2: Apply overall discount (on subtotal after item discounts)
         overall_discount_value = self._to_decimal(getattr(self.quotation, 'discount', 0))
         discount_label = 'Discount:'
         overall_discount_amount = Decimal('0.00')
@@ -465,14 +455,23 @@ class QuotationPDFGenerator:
                 overall_discount_amount = subtotal_after_item_disc * (overall_discount_value / 100)
                 discount_label = f'Discount ({overall_discount_value}%):'
         
-        # Calculate final grand total
-        grand_total = total_before_overall_discount - overall_discount_amount
+        subtotal_after_all_discounts = subtotal_after_item_disc - overall_discount_amount
+
+        # Step 3: Apply tax on net amount (after all discounts)
+        tax_rate = self._to_decimal(getattr(self.quotation, 'tax_rate', 0))
+        tax_amount = Decimal('0.00')
+        tax_label = 'Tax:'
+        if tax_rate > 0:
+            tax_amount = subtotal_after_all_discounts * (tax_rate / 100)
+            tax_label = f'Tax ({tax_rate}%):'
+        
+        # Step 4: Final grand total
+        grand_total = subtotal_after_all_discounts + tax_amount
 
         totals_data = [
-            ['Subtotal:', self._format_currency(subtotal)],
-            ['Item Discounts:', f"- {self._format_currency(total_item_discount)}"],
-            [tax_label, self._format_currency(tax_amount)],
+            ['Subtotal:', self._format_currency(subtotal_after_item_disc)],
             [discount_label, f"- {self._format_currency(overall_discount_amount)}"],
+            [tax_label, self._format_currency(tax_amount)],
             ['Total Amount:', self._format_currency(grand_total)],
         ]
         
@@ -492,6 +491,7 @@ class QuotationPDFGenerator:
         )
         
         return [summary_container, Spacer(1, 10*mm)]
+
         
     def _build_terms(self):
         """Build terms and conditions section"""

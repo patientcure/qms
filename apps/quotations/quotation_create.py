@@ -191,7 +191,6 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                         quotation.assigned_to = salesperson
             
             quotation.save()
-
             if items_data:
                 create_or_update_product_details(quotation, items_data)
 

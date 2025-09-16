@@ -84,33 +84,40 @@ def calculate_totals_from_details(quotation):
     if not details:
         return {'subtotal': Decimal('0.00'), 'total': Decimal('0.00')}
 
+    # Step 1: Gross subtotal (before any discounts)
     gross_subtotal = sum(d.quantity * d.unit_price for d in details)
     
+    # Step 2: Apply item-level discounts
     total_item_discount = sum(
         (d.quantity * d.unit_price) * ((d.discount or Decimal('0.00')) / 100)
         for d in details
     )
-
     subtotal_after_item_disc = gross_subtotal - total_item_discount
     
-    tax_rate = quotation.tax_rate or Decimal('0.00')
-    tax_amount = subtotal_after_item_disc * (tax_rate / Decimal('100.00'))
-    
-    total_before_overall_discount = subtotal_after_item_disc + tax_amount
-    
-    overall_discount_amount = Decimal('0.00')
+    # Step 3: Apply overall discount
     discount = quotation.discount or Decimal('0.00')
+    overall_discount_amount = Decimal('0.00')
     if discount > 0:
         if quotation.discount_type == 'amount':
             overall_discount_amount = discount
         else:  # Percentage
-            overall_discount_amount = (subtotal_after_item_disc * discount / Decimal('100.00'))
-            
-    final_total = total_before_overall_discount - overall_discount_amount
+            overall_discount_amount = subtotal_after_item_disc * (discount / Decimal('100.00'))
+    
+    subtotal_after_all_discounts = subtotal_after_item_disc - overall_discount_amount
+
+    # Step 4: Apply tax on net (after all discounts)
+    tax_rate = quotation.tax_rate or Decimal('0.00')
+    tax_amount = subtotal_after_all_discounts * (tax_rate / Decimal('100.00'))
+
+    # Step 5: Final total = discounted subtotal + tax
+    final_total = subtotal_after_all_discounts + tax_amount
 
     return {
-        'subtotal': gross_subtotal.quantize(Decimal('0.01')),
-        'total': final_total.quantize(Decimal('0.01'))
+        'subtotal': subtotal_after_item_disc.quantize(Decimal('0.01')),
+        'total': final_total.quantize(Decimal('0.01')),
+        'item_discount': total_item_discount.quantize(Decimal('0.01')),
+        'overall_discount': overall_discount_amount.quantize(Decimal('0.01')),
+        'tax': tax_amount.quantize(Decimal('0.01')),
     }
 
 
