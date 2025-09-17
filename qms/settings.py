@@ -23,7 +23,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = str(os.getenv('DEBUG', 'False')).lower() == 'true'
 
 # Update this for your production domains
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,https://qms-3lra.vercel.app').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,https://qms-3lra.vercel.app,"http://69.62.80.202').split(',')
 
 # --- Application Definitions ---
 # --------------------------------------------------------------------------
