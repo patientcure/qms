@@ -124,8 +124,8 @@ USE_TZ = True
 # --------------------------------------------------------------------------
 # Static files (CSS, JavaScript, Images for your site's template)
 STATIC_URL = 'static/'
-STATIC_ROOT = "/var/www/qms/static/"
-GENERATED_FILES_DIR = '/var/www/qms/static/quotations'
+STATIC_ROOT = os.path.join(BASE_DIR, 'qms', 'staticfiles') 
+GENERATED_FILES_DIR = os.path.join(BASE_DIR, 'qms', 'staticfiles', 'quotations')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (User-uploaded content)
