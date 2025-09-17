@@ -124,7 +124,8 @@ USE_TZ = True
 # --------------------------------------------------------------------------
 # Static files (CSS, JavaScript, Images for your site's template)
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'  # Directory where collectstatic will gather files
+STATIC_ROOT = "/var/www/qms/static/"
+GENERATED_FILES_DIR = '/var/www/qms/static/quotations'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (User-uploaded content)
