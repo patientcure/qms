@@ -19,8 +19,6 @@ ENV/
 db.sqlite3
 /media/
 staticfiles/
-static/
-
 # Django migrations (optional, keep if you want to version control migrations)
 */migrations/__pycache__/
 */migrations/*.py[cod]
