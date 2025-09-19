@@ -6,11 +6,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, ListFlowable, ListItem
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, 
+    ListFlowable, ListItem, Frame, PageTemplate, PageBreak, NextPageTemplate
+)
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from reportlab.lib.utils import ImageReader
-from reportlab.platypus import Frame, PageTemplate
 from .models import TermsAndConditions as Term
 from django.contrib.staticfiles import finders
 
@@ -570,7 +572,6 @@ class QuotationPDFGenerator:
         elements = []
         
         # Add a NextPageTemplate directive to ensure our template is used
-        from reportlab.platypus import NextPageTemplate
         elements.append(NextPageTemplate('firstPage'))
         
         # Build all sections
@@ -580,7 +581,11 @@ class QuotationPDFGenerator:
         item_elements, calculated_totals = self._build_items_table()
         elements.extend(item_elements)
         elements.extend(self._build_totals(calculated_totals))
+
+        # Start Terms & Conditions on a new page
+        elements.append(PageBreak())
         elements.extend(self._build_terms())
+
         elements.extend(self._build_footer())
         
         # Build the document with explicit template usage
