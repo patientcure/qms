@@ -45,14 +45,15 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
         # --- File path ---
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         file_name = f'quotation_{quotation.quotation_number}_{timestamp}.pdf'
-        file_path = os.path.join(settings.GENERATED_FILES_DIR, file_name)
+        file_path = os.path.join(settings.MEDIA_ROOT, 'quotations', file_name)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
         # --- Save PDF locally ---
         with open(file_path, 'wb') as f:
             f.write(pdf_content)
 
-        # --- Generate public URL ---
-        pdf_url = request.build_absolute_uri(os.path.join(settings.STATIC_URL, 'quotations', file_name))
+        pdf_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, 'quotations', file_name))
+
 
         logger.info(f"PDF saved locally for quotation {quotation.id}. URL: {pdf_url}")
         return file_path, pdf_url

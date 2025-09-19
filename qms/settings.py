@@ -127,6 +127,9 @@ STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR,'staticfiles') 
 GENERATED_FILES_DIR = os.path.join(BASE_DIR,'staticfiles', 'quotations')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 
 # Media files (User-uploaded content)
 # 1. Load Firebase credentials from the environment variable
