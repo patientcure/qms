@@ -1,1 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtualenv
+env/
+venv/
+ENV/
+.venv/
+
+# Django specific
+*.log
+*.pot
+*.pyc
+*.pyo
+*.db
+*.sqlite3
+db.sqlite3
+/media/
+staticfiles/
+static/
+
+# Django migrations (optional, keep if you want to version control migrations)
+*/migrations/__pycache__/
+*/migrations/*.py[cod]
+# Uncomment the next line if you don’t want to track migration files
+# */migrations/*.py
+
+# Secrets & configs
+*.env
 .env.*
+!.env.example
+
+# Pytest / coverage
+.coverage
+coverage/
+htmlcov/
+.tox/
+.pytest_cache/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Build & packaging
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Gunicorn / uWSGI
+gunicorn.pid
+
+# Cache
+*.cache
+.cache/
