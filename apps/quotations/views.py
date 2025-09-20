@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from .utils_quotation import get_quotation_response_data
 from decimal import Decimal
 from rest_framework import generics
+from django.db.models import ProtectedError
 import json
 from apps.accounts.models import User, Roles
 from .models import (
@@ -917,16 +918,29 @@ class CustomerCreateView( BaseAPIView):
 
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     def delete(self, request):
+        """Handles the permanent deletion of a customer."""
         customer_id = request.GET.get('id')
         if not customer_id:
-            return JsonResponse({'error': 'Customer ID required in query params'}, status=400)
+            return JsonResponse({'error': 'Customer ID is required.'}, status=400)
 
-        customer = get_object_or_404(Customer, pk=customer_id)
-        customer.delete()
-        return JsonResponse({
-            'success': True,
-            'message': 'Customer deleted successfully'
-        })
+        try:
+            # Use .get() to provide a specific 404 response
+            customer = Customer.objects.get(pk=customer_id)
+            customer_id_to_confirm = customer.id
+            customer.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Customer with ID {customer_id_to_confirm} has been permanently deleted.',
+            })
+        except Customer.DoesNotExist:
+            return JsonResponse({'error': f'Customer with ID {customer_id} not found.'}, status=404)
+        except ProtectedError:
+            return JsonResponse({
+                'error': f'Customer with ID {customer_id} cannot be deleted because they are associated with existing leads or quotations.'
+            }, status=409) # 409 Conflict status code is appropriate
+        except Exception as e:
+            # Catch any other unexpected errors
+            return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
 
 class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
     def get(self, request, customer_id):
@@ -1125,19 +1139,29 @@ class ProductCreateView(JWTAuthentication, BaseAPIView):
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
     def delete(self, request):
-        """Handles deactivating a product (soft delete)."""
+        """Handles the permanent deletion of a product."""
         product_id = request.GET.get('id')
         if not product_id:
-            return JsonResponse({'error': 'Product ID required in query params'}, status=400)
+            return JsonResponse({'error': 'Product ID is required.'}, status=400)
 
-        product = get_object_or_404(Product, pk=product_id)
-        product.active = False
-        product.save(update_fields=['active'])
-        return JsonResponse({
-            'success': True,
-            'message': 'Product deactivated successfully',
-            'data': {'id': product.id, 'active': product.active}
-        })
+        try:
+            # Use .get() to catch DoesNotExist separately
+            product = Product.objects.get(pk=product_id)
+            product_id_to_confirm = product.id
+            product.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Product with ID {product_id_to_confirm} has been permanently deleted.',
+            })
+        except Product.DoesNotExist:
+            return JsonResponse({'error': f'Product with ID {product_id} not found.'}, status=404)
+        except ProtectedError:
+            return JsonResponse({
+                'error': f'Product with ID {product_id} cannot be deleted because it is being used in one or more quotations.'
+            }, status=409) # 409 Conflict is appropriate here
+        except Exception as e:
+            # Catch any other unexpected database errors
+            return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
 
 class ProductDetailView(JWTAuthMixin, BaseAPIView):
     def get(self, request, product_id):
@@ -1180,15 +1204,30 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
             })
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
-    def delete(self, request, product_id):
-        product = get_object_or_404(Product, pk=product_id)
-        product.active = False
-        product.save()
-        return JsonResponse({
-            'success': True,
-            'message': 'Product deactivated successfully',
-            'data': {'active': product.active}
-        })
+    def delete(self, request):
+        """Handles the permanent deletion of a product."""
+        product_id = request.GET.get('id')
+        if not product_id:
+            return JsonResponse({'error': 'Product ID is required.'}, status=400)
+
+        try:
+            # Use .get() to catch DoesNotExist separately
+            product = Product.objects.get(pk=product_id)
+            product_id_to_confirm = product.id
+            product.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Product with ID {product_id_to_confirm} has been permanently deleted.',
+            })
+        except Product.DoesNotExist:
+            return JsonResponse({'error': f'Product with ID {product_id} not found.'}, status=404)
+        except ProtectedError:
+            return JsonResponse({
+                'error': f'Product with ID {product_id} cannot be deleted because it is being used in one or more quotations.'
+            }, status=409) # 409 Conflict is appropriate here
+        except Exception as e:
+            # Catch any other unexpected database errors
+            return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()

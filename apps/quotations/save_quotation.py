@@ -35,6 +35,7 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
 
         # --- Generate PDF ---
         generator = QuotationPDFGenerator(
+            user = request.user,
             quotation=quotation,
             items_data=enriched_items,
             company_profile=company_profile,
