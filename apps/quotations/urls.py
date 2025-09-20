@@ -44,6 +44,7 @@ from .views import (
     # Dashboard Stats
     AdminDashboardStatsView,
     SalespersonDashboardStatsView,
+    TopPerfomerView,
     # Product & Customer Search
     ProductSearchView,
     CustomerSearchView,
@@ -101,6 +102,7 @@ urlpatterns = [
     # ========== Dashboard Stats API ==========
     path('api/dashboard/admin/stats/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
     path('api/dashboard/salesperson/stats/', SalespersonDashboardStatsView.as_view(), name='salesperson_dashboard_stats'),
+    path('stats/top-performers/', TopPerfomerView.as_view(), name='top-performers'),
 
     #============Terms API ==================
     path('api/terms/', TermsListView.as_view(), name='terms-list'),

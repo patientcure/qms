@@ -34,7 +34,8 @@ from django.http import JsonResponse
 from django.db import transaction
 from django.conf import settings
 logger = logging.getLogger(__name__)
-
+from datetime import datetime
+from django.db.models import Count, Q, Case, When, F, FloatField
 
 class JWTAuthMixin:
     """Base mixin to authenticate requests using JWT access token."""
@@ -1252,3 +1253,85 @@ class UserStatsView(JWTAuthMixin, BaseAPIView):
             'date_joined': user.date_joined,
         }
         return JsonResponse({'data': stats})
+    
+class TopPerfomerView(BaseAPIView):
+    def get(self, request):
+        """
+        Calculates and returns a ranked list of top-performing salespeople
+        based on quotation count and conversion rate within a given timeframe.
+        """
+        try:
+            # --- 1. Handle Query Parameters using request.GET ---
+            start_date_str = request.GET.get('start_date')
+            end_date_str = request.GET.get('end_date')
+            limit = request.GET.get('limit', 10)
+
+            logger.info(
+                f"TopPerformerView request received with params: start_date='{start_date_str}', "
+                f"end_date='{end_date_str}', limit='{limit}'"
+            )
+
+            try:
+                limit = int(limit)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid limit parameter '{limit}'. Falling back to default of 10.")
+                limit = 10
+
+            # --- 2. Build Date Filter for Quotations ---
+            quotation_filters = Q()
+            if start_date_str:
+                quotation_filters &= Q(quotations__created_at__gte=datetime.strptime(start_date_str, '%Y-%m-%d').date())
+            if end_date_str:
+                quotation_filters &= Q(quotations__created_at__lte=datetime.strptime(end_date_str, '%Y-%m-%d').date())
+            logger.info("Querying for salespeople and annotating performance stats...")
+            sent_filter = ~Q(status=QuotationStatus.DRAFT)
+            accepted_filter = Q(status=QuotationStatus.ACCEPTED)
+
+            salespeople = User.objects.filter(role=Roles.SALESPERSON).annotate(
+                total_sent=Count(
+                    'quotations',
+                    filter=Q(quotations__in=Quotation.objects.filter(sent_filter, **{k.replace('quotations__',''):v for k,v in quotation_filters.children}))
+                ),
+                total_accepted=Count(
+                    'quotations',
+                    filter=Q(quotations__in=Quotation.objects.filter(accepted_filter, **{k.replace('quotations__',''):v for k,v in quotation_filters.children}))
+                )
+            ).annotate(
+                conversion_rate=Case(
+                    When(total_sent=0, then=0.0),
+                    default=(F('total_accepted') * 100.0 / F('total_sent')),
+                    output_field=FloatField()
+                )
+            )
+
+            # --- 4. Rank Performers ---
+            top_performers = salespeople.filter(total_sent__gt=0).order_by('-conversion_rate', '-total_sent')
+            
+            logger.debug(f"Top Performers Query SQL: {top_performers.query}")
+
+            top_performers = top_performers[:limit]
+
+            result = [
+                {
+                    'user_id': user.id,
+                    'name': user.get_full_name() or user.username,
+                    'total_sent': user.total_sent,
+                    'total_accepted': user.total_accepted,
+                    'conversion_rate': round(user.conversion_rate, 2)
+                }
+                for user in top_performers
+            ]
+            logger.info(f"Successfully found {len(result)} top performers.")
+
+            return JsonResponse({'data': result})
+
+        except ValueError as e:
+            logger.warning(f"Date format error in TopPerformerView: {e}")
+            return JsonResponse({'error': f"Invalid date format: {e}. Use YYYY-MM-DD."}, status=400)
+        
+        except Exception as e:
+            logger.error(
+                "An unexpected error occurred in TopPerformerView",
+                exc_info=True
+            )
+            return JsonResponse({'error': 'An internal server error occurred.'}, status=500)
