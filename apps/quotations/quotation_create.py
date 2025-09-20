@@ -208,7 +208,8 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                 assigned_to=quotation.assigned_to, 
                 status=LeadStatus.PENDING, 
                 created_by=user, 
-                quotation_id=quotation.id
+                quotation_id=quotation.id,
+                follow_up_date = quotation.follow_up_date
             )
             quotation.lead_id = lead.id
 
