@@ -705,14 +705,13 @@ class AllCustomerListView(BaseAPIView):
         
         if user and getattr(user, "role", None) == Roles.SALESPERSON:
             leads_qs = Lead.objects.filter(Q(assigned_to=user) | Q(created_by=user))
-            quotations_qs = Quotation.objects.filter(assigned_to=user)
 
+            quotations_qs = Quotation.objects.filter(Q(assigned_to=user) | Q(created_by=user))
             customer_filter = Q(leads__in=leads_qs) | Q(quotations__in=quotations_qs)
 
             customers = Customer.objects.filter(
                 customer_filter
             ).prefetch_related(
-                # Use the pre-filtered querysets for efficiency
                 Prefetch('leads', queryset=leads_qs, to_attr='filtered_leads'),
                 Prefetch('quotations', queryset=quotations_qs, to_attr='filtered_quotations'),
                 'filtered_leads__assigned_to',
