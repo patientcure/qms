@@ -699,7 +699,7 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
 
         return JsonResponse({'data': data}, safe=False)
     
-class AllCustomerListView(BaseAPIView):
+class AllCustomerListView(JWTAuthMixin,BaseAPIView):
     def get(self, request):
         user = getattr(request, "user", None)
         
