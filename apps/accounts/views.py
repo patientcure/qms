@@ -252,6 +252,44 @@ class CurrentUserView(JWTAuthMixin, View):
             }
         })
 
+# ========== Password Management API ==========
+class ChangePasswordView(APIView):
+    """
+    An endpoint for changing password.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user = self.request.user
+        old_password = request.data.get("old_password")
+        new_password = request.data.get("new_password")
+
+        if not old_password or not new_password:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Old password and new password are required.'
+            }, status=400)
+
+        # Check old password
+        if not user.check_password(old_password):
+            return JsonResponse({
+                'success': False, 
+                'error': 'Your old password was entered incorrectly. Please enter it again.'
+            }, status=400)
+        
+        # validate password
+        if len(new_password) < 8:
+             return JsonResponse({
+                'success': False,
+                'error': 'Password must be at least 8 characters long.'
+            }, status=400)
+
+
+        # set_password also hashes the password that the user will get
+        user.set_password(new_password)
+        user.save()
+        return JsonResponse({'success': True, 'message': 'Password updated successfully'})
+
 
 # ========== Quotation Status Update API ==========
 class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
@@ -415,4 +453,3 @@ class ToggleUserType(AdminRequiredMixin, BaseAPIView):
                 'role': user.role
             }
         })
-    
