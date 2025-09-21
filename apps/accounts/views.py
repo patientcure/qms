@@ -278,7 +278,7 @@ class ChangePasswordView(APIView):
             }, status=400)
         
         # validate password
-        if len(new_password) < 8:
+        if len(new_password) < 6:
              return JsonResponse({
                 'success': False,
                 'error': 'Password must be at least 8 characters long.'

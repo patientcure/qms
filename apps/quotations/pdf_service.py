@@ -323,13 +323,18 @@ class QuotationPDFGenerator:
 
     def _build_footer(self):
         creator_name = "Admin"
-        if self.user and self.user.is_authenticated:
-            creator_name = self.user.get_full_name() or self.user.username
-
+        creator_phone = ""
+        user = getattr(self, 'user', None)
+        if user and user.is_authenticated:
+            creator_name = user.get_full_name() or user.username or "Admin"
+            creator_phone = getattr(user, 'phone_number', "")
+        footer_text = f"Thank you for your business!<br/><br/>Created By<br/>{creator_name}"
+        if creator_phone:
+            footer_text += f"<br/>{creator_phone}"
         footer_table = Table([[
-            Paragraph("Thank you for your business!", self.normal_style),
-            Paragraph(f"Digitally Signed<br/>{creator_name}", self.right_style)
-        ]], colWidths=[85 * mm, 85 * mm])
+            Paragraph(footer_text, self.normal_style)
+        ]], colWidths=[170 * mm])
+
         return [Spacer(1, 15 * mm), footer_table]
 
     def generate(self):
@@ -342,7 +347,7 @@ class QuotationPDFGenerator:
         elements.extend(item_elements)
         elements.extend(self._build_totals(calculated_totals))
         elements.extend(self._build_terms())
-        # elements.extend(self._build_footer())
+        elements.extend(self._build_footer())
         
         self.doc.build(elements, onFirstPage=self._draw_header_footer, onLaterPages=self._draw_header_footer)
         
