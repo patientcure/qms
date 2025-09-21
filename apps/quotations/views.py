@@ -702,18 +702,24 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
 class AllCustomerListView(BaseAPIView):
     def get(self, request):
         user = getattr(request, "user", None)
-        # If user is SALESPERSON, filter leads/quotations by created_by or assigned_to
+        
         if user and getattr(user, "role", None) == Roles.SALESPERSON:
             leads_qs = Lead.objects.filter(Q(assigned_to=user) | Q(created_by=user))
-            quotations_qs = Quotation.objects.filter(Q(assigned_to=user))
-            customers = Customer.objects.prefetch_related(
+            quotations_qs = Quotation.objects.filter(assigned_to=user)
+
+            customer_filter = Q(leads__in=leads_qs) | Q(quotations__in=quotations_qs)
+
+            customers = Customer.objects.filter(
+                customer_filter
+            ).prefetch_related(
+                # Use the pre-filtered querysets for efficiency
                 Prefetch('leads', queryset=leads_qs, to_attr='filtered_leads'),
                 Prefetch('quotations', queryset=quotations_qs, to_attr='filtered_quotations'),
                 'filtered_leads__assigned_to',
                 'filtered_quotations__assigned_to',
                 'filtered_quotations__details__product',
                 'filtered_quotations__terms'
-            ).order_by('-created_at')
+            ).distinct().order_by('-created_at')
         else:
             customers = Customer.objects.prefetch_related(
                 'leads__assigned_to', 
@@ -1356,7 +1362,9 @@ class TopPerfomerView(BaseAPIView):
                     'name': user.get_full_name() or user.username,
                     'total_sent': user.total_sent,
                     'total_accepted': user.total_accepted,
-                    'conversion_rate': round(user.conversion_rate, 2)
+                    'conversion_rate': round(user.conversion_rate, 2),
+                    'email':user.email,
+                    'phone':user.phone_number,
                 }
                 for user in top_performers
             ]

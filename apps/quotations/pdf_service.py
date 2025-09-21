@@ -247,10 +247,13 @@ class QuotationPDFGenerator:
 
         totals_data = [
             ['Subtotal:', self._format_currency(subtotal_after_item_disc)],
-            [discount_label, f"- {self._format_currency(overall_discount_amount)}"],
+        ]       
+        if overall_discount_amount > 0:
+            totals_data.append([discount_label, f"- {self._format_currency(overall_discount_amount)}"])       
+        totals_data.extend([
             [tax_label, self._format_currency(tax_amount)],
             ['Total Amount:', self._format_currency(grand_total)],
-        ]
+        ])
         totals_table = Table(totals_data, colWidths=[40*mm, 40*mm])
         totals_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
@@ -339,7 +342,7 @@ class QuotationPDFGenerator:
         elements.extend(item_elements)
         elements.extend(self._build_totals(calculated_totals))
         elements.extend(self._build_terms())
-        elements.extend(self._build_footer())
+        # elements.extend(self._build_footer())
         
         self.doc.build(elements, onFirstPage=self._draw_header_footer, onLaterPages=self._draw_header_footer)
         
