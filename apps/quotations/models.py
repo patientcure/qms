@@ -165,6 +165,7 @@ class Quotation(TimestampedModel):
     lead_id = models.IntegerField(null=True, blank=True)
     has_pdf = models.BooleanField(default=False)
     file_url = models.URLField(blank=True)
+    additionalNotes = models.TextField(blank=True,null=True)
     created_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, related_name="quotations_created"
     )

@@ -321,6 +321,25 @@ class QuotationPDFGenerator:
 
         return elements
 
+    def _build_valid_until(self):
+        valid_until = getattr(self.quotation, 'follow_up_date', None)
+        if valid_until:
+            return [Paragraph(f"<b>Valid Until:</b> {valid_until.strftime('%d-%m-%Y')}", self.normal_style), Spacer(1, 5 * mm)]
+        return []
+
+
+    def _build_additional_notes(self):
+        """Build additional notes section if any"""
+        elements = []
+        additional_notes = getattr(self.quotation, 'additionalNotes', '')
+        if additional_notes:
+            clean_notes = self._clean_html_content(additional_notes)
+            if clean_notes:
+                elements.append(Paragraph("Additional Notes:", self.section_heading_style))
+                elements.append(Paragraph(clean_notes, self.normal_style))
+                elements.append(Spacer(1, 8 * mm))
+        return elements
+    
     def _build_footer(self):
         creator_name = "Admin"
         creator_phone = ""
@@ -347,6 +366,8 @@ class QuotationPDFGenerator:
         elements.extend(item_elements)
         elements.extend(self._build_totals(calculated_totals))
         elements.extend(self._build_terms())
+        elements.extend(self._build_valid_until())
+        elements.extend(self._build_additional_notes())
         elements.extend(self._build_footer())
         
         self.doc.build(elements, onFirstPage=self._draw_header_footer, onLaterPages=self._draw_header_footer)
