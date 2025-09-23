@@ -42,7 +42,7 @@ class QuotationForm(forms.ModelForm):
         model = Quotation
         fields = [
             'assigned_to', 'terms', 'email_template', 'discount',
-            'follow_up_date','status','discount_type', 'tax_rate','addtionalNotes'
+            'follow_up_date','status','discount_type', 'tax_rate','additionalNotes'
         ]
     
     def __init__(self, *args, **kwargs):
@@ -55,7 +55,7 @@ class QuotationForm(forms.ModelForm):
         self.fields['tax_rate'].required = False
         self.fields['discount_type'].required = False
         self.fields['discount'].required = False
-        self.fields['addtionalNotes'].required = False
+        self.fields['additionalNotes'].required = False
         
 class SalespersonForm(UserCreationForm):
     first_name = forms.CharField(required=True)
