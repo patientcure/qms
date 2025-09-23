@@ -135,6 +135,19 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             
             quotation.save(update_fields=['lead_id', 'file_url', 'has_pdf', 'subtotal', 'total'])
             
+            if request_json.get('send_immediately'):
+                quotation.refresh_from_db()
+                try:
+                    send_quotation_email(quotation)
+                    ActivityLog.log(
+                        actor=user, 
+                        action=ActivityAction.QUOTATION_SENT, 
+                        entity=quotation, 
+                        message=f"Quotation {quotation.quotation_number} sent immediately",
+                        customer = customer,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send email: {str(e)}")
 
             logger.info(f"Quotation {quotation.quotation_number} updated successfully")
             
