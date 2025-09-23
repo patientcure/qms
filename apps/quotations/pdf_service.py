@@ -324,19 +324,41 @@ class QuotationPDFGenerator:
     def _build_valid_until(self):
         valid_until = getattr(self.quotation, 'follow_up_date', None)
         if valid_until:
-            return [Paragraph(f"<b>Valid Until:</b> {valid_until.strftime('%d-%m-%Y')}", self.normal_style), Spacer(1, 5 * mm)]
+            table = Table(
+                [[Paragraph(f"<b>Valid Until:</b> {valid_until.strftime('%d-%m-%Y')}", self.normal_style)]],
+                colWidths=[170 * mm]
+            )
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.Color(232/255, 245/255, 233/255)),  # light green
+                ('BOX', (0, 0), (-1, -1), 1, colors.green),
+                ('LEFTPADDING', (0, 0), (-1, -1), 12),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            return [table, Spacer(1, 5 * mm)]
         return []
 
-
     def _build_additional_notes(self):
-        """Build additional notes section if any"""
         elements = []
         additional_notes = getattr(self.quotation, 'additionalNotes', '')
         if additional_notes:
             clean_notes = self._clean_html_content(additional_notes)
             if clean_notes:
                 elements.append(Paragraph("Additional Notes:", self.section_heading_style))
-                elements.append(Paragraph(clean_notes, self.normal_style))
+                notes_table = Table(
+                    [[Paragraph(clean_notes, self.normal_style)]],
+                    colWidths=[170 * mm]
+                )
+                notes_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.Color(1, 1, 0.7)),  # light yellow
+                    ('BOX', (0, 0), (-1, -1), 1, colors.yellow),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 12),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ]))
+                elements.append(notes_table)
                 elements.append(Spacer(1, 8 * mm))
         return elements
     
