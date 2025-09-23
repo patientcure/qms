@@ -573,6 +573,10 @@ class QuotationDetailView(BaseAPIView):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
 
         quotation_number = quotation.quotation_number
+
+        if quotation.lead_id:
+            Lead.objects.filter(pk=quotation.lead_id).delete()
+
         quotation.delete()
         
         return JsonResponse({
