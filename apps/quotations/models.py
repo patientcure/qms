@@ -147,7 +147,7 @@ class Quotation(TimestampedModel):
     )
     terms = models.ManyToManyField(TermsAndConditions, blank=True)
     email_template = models.ForeignKey(EmailTemplate, on_delete=models.SET_NULL, null=True, blank=True)
-    status = models.CharField(max_length=20, choices=QuotationStatus.choices, default=QuotationStatus.PENDING)
+    status = models.CharField(max_length=20, choices=QuotationStatus.choices, default=QuotationStatus.DRAFT)
     follow_up_date = models.DateField(null=True, blank=True)
     discount_type = models.CharField(
         max_length=20,

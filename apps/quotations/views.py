@@ -301,7 +301,7 @@ class LeadCreateView(JWTAuthMixin, BaseAPIView):
             quotation = Quotation.objects.create(
                 customer=lead.customer,
                 assigned_to=lead.assigned_to,
-                status=QuotationStatus.PENDING
+                status=QuotationStatus.DRAFT
             )
             lead.quotation_id = quotation.id
 
