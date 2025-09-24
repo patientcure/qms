@@ -345,13 +345,12 @@ class QuotationPDFGenerator:
         if additional_notes:
             clean_notes = self._clean_html_content(additional_notes)
             if clean_notes:
-                elements.append(Paragraph("Additional Notes:", self.section_heading_style))
                 notes_table = Table(
-                    [[Paragraph(clean_notes, self.normal_style)]],
+                    [[Paragraph(f"Additional Notes: {clean_notes}", self.normal_style)]],
                     colWidths=[170 * mm]
                 )
                 notes_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, -1), colors.Color(1, 1, 0.7)),  # light yellow
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.Color(1, 1, 0.7)),
                     ('BOX', (0, 0), (-1, -1), 1, colors.yellow),
                     ('LEFTPADDING', (0, 0), (-1, -1), 12),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 12),
@@ -388,8 +387,8 @@ class QuotationPDFGenerator:
         elements.extend(item_elements)
         elements.extend(self._build_totals(calculated_totals))
         elements.extend(self._build_terms())
-        elements.extend(self._build_valid_until())
         elements.extend(self._build_additional_notes())
+        elements.extend(self._build_valid_until())
         elements.extend(self._build_footer())
         
         self.doc.build(elements, onFirstPage=self._draw_header_footer, onLaterPages=self._draw_header_footer)
