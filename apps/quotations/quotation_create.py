@@ -89,9 +89,10 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
         # 4. Log Activity
         log_quotation_changes(quotation, action, user)
 
-        # 5. Send Email if requested
+        quotation.save(update_fields=['subtotal', 'total', 'file_url', 'has_pdf'])
         if send_immediately:
-            quotation.refresh_from_db() # Ensure the latest data is used for the email
+
+            quotation.refresh_from_db() 
             try:
                 send_quotation_email(quotation)
                 ActivityLog.log(
@@ -103,7 +104,6 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                 )
             except Exception as e:
                 logger.error(f"Failed to send email for Quotation {quotation.id}: {e}")
-
 
     @transaction.atomic
     def post(self, request):
