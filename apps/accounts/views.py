@@ -252,6 +252,22 @@ class CurrentUserView(JWTAuthMixin, View):
             }
         })
 
+class CheckTokenValidityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return JsonResponse({
+            'success': True,
+            'message': 'Access token is valid.',
+            'user': {
+                'id': request.user.id,
+                'username': request.user.username,
+                'email': request.user.email,
+                'role': request.user.role,
+            }
+        })
+
+
 # ========== Password Management API ==========
 class ChangePasswordView(APIView):
     """

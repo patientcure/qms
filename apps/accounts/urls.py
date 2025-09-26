@@ -10,7 +10,8 @@ from .views import (
     UserListView,
     DeleteUserView,
     ToggleUserType,
-    ChangePasswordView
+    ChangePasswordView,
+    CheckTokenValidityView
 )
 
 app_name = "accounts"
@@ -24,6 +25,9 @@ urlpatterns = [
     path("api/user/current/", CurrentUserView.as_view(), name="current_user"),
     path("api/users/", UserListView.as_view(), name="user_list"),
     path("api/users/<int:user_id>/delete/", DeleteUserView.as_view(), name="delete_user"),
+    path("api/token/verify/", CheckTokenValidityView.as_view(), name="check_token_validity"),
+
+
     # ========== Password Management API ==========
     path("api/user/change-password/", ChangePasswordView.as_view(), name="change_password"),
 

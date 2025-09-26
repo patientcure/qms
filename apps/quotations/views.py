@@ -606,7 +606,6 @@ class QuotationSendView(JWTAuthMixin, BaseAPIView):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
-
 class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
     def post(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)

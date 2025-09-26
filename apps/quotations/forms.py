@@ -4,6 +4,9 @@ from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from .models import Lead, Customer
 from apps.accounts.models import User,Roles
+from django import forms
+from .models import ProductDetails
+
 
 class CustomerForm(forms.ModelForm):
     class Meta:
@@ -20,8 +23,6 @@ class ProductForm(forms.ModelForm):
             "dimensions", "warranty_months", "brand", "is_available", "active"
         ]
 
-from django import forms
-from .models import ProductDetails
 
 class ProductDetailsForm(forms.ModelForm):
     class Meta:
