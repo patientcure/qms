@@ -160,6 +160,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                     follow_up_date=quotation.follow_up_date
                 )
                 quotation.lead_id = lead.id
+                quotation.save(update_fields=["lead_id", "status"]) 
 
             # Step 6: Process items, totals, PDF, and email
             self._process_quotation_data(quotation, request, user, action=ActivityAction.QUOTATION_CREATED)
@@ -214,11 +215,9 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             
             # Step 3: Handle status updates and lead creation logic
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
-            
             if original_status == QuotationStatus.DRAFT and send_immediately:
                 # First time sending a DRAFT quotation. Create lead and update status.
                 quotation.status = QuotationStatus.PENDING
-                
                 if not lead:
                     lead = Lead.objects.create(
                         customer=customer, 
@@ -229,7 +228,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                         follow_up_date=quotation.follow_up_date
                     )
                     quotation.lead_id = lead.id
-
+                    quotation.save(update_fields=["lead_id", "status"])  # Ensure lead_id is saved immediately
             elif original_status != QuotationStatus.DRAFT:
                 # Any update to an already-sent quotation marks it as REVISED.
                 quotation.status = QuotationStatus.REVISED
