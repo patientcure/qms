@@ -11,7 +11,8 @@ from .views import (
     DeleteUserView,
     ToggleUserType,
     ChangePasswordView,
-    CheckTokenValidityView
+    CheckTokenValidityView,
+    EditUserView
 )
 
 app_name = "accounts"
@@ -36,6 +37,7 @@ urlpatterns = [
     path("api/quotations/<int:quotation_id>/status/", QuotationStatusUpdateView.as_view(), name="update_quotation_status"),
     path("api/leads/<int:lead_id>/status/", LeadStatusUpdateView.as_view(), name="update_lead_status"),
 
-    path("api/<int:user_id>/toggleUser/",ToggleUserType.as_view(),name="toggle_user")
+    path("api/<int:user_id>/toggleUser/",ToggleUserType.as_view(),name="toggle_user"),
+    path("api/users/<int:user_id>/edit/", EditUserView.as_view(), name="edit_user")
 
 ]

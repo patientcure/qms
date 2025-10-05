@@ -469,3 +469,49 @@ class ToggleUserType(AdminRequiredMixin, BaseAPIView):
                 'role': user.role
             }
         })
+
+class EditUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id)
+        # Only allow admin or the user themselves to edit
+        if request.user.role != "ADMIN" and request.user.id != user.id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Permission denied. Only admin or the user themselves can edit.'
+            }, status=403)
+
+        data = request.json if hasattr(request, 'json') else request.data
+        # Update allowed fields
+        allowed_fields = [
+            'first_name', 'last_name', 'email', 'address', 'phone_number', 'username'
+        ]
+        updated = False
+        for field in allowed_fields:
+            if field in data and getattr(user, field, None) != data[field]:
+                setattr(user, field, data[field])
+                updated = True
+        if updated:
+            user.save()
+            return JsonResponse({
+                'success': True,
+                'message': 'User details updated successfully',
+                'data': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'phone_number': user.phone_number,
+                    'address': user.address,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'is_active': user.is_active,
+                    'date_joined': user.date_joined,
+                }
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'No changes detected.'
+            }, status=400)
