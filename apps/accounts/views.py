@@ -138,6 +138,9 @@ class CreateUserView(BaseAPIView):
         if User.objects.filter(email=email).exists():
             return JsonResponse({'success': False, 'error': 'Email already exists'}, status=400)
         
+        if phone_number and User.objects.filter(phone_number=phone_number).exists():
+            return JsonResponse({'success': False, 'error': 'Phone number already exists'}, status=400)
+        
         try:
             user = User.objects.create_user(
                 username=username,
