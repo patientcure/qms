@@ -28,6 +28,7 @@ class LeadStatus(models.TextChoices):
     QUALIFIED = 'QUALIFIED', _('Qualified')
     PROPOSAL = 'PROPOSAL', _('Proposal Sent')
     PRIORITY = 'PRIORITY', _('Priority')
+    REVISED = 'REVISED', _('Revised')
 
 class QuotationStatus(models.TextChoices):
     DRAFT = 'DRAFT', 'Draft'
