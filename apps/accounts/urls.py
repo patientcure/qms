@@ -19,7 +19,7 @@ app_name = "accounts"
 
 urlpatterns = [
     # ========== Authentication API ==========
-    path("api/admin/login/", AdminLoginView.as_view(), name="admin_login"),
+    path("api/staff/login/", AdminLoginView.as_view(), name="admin_login"),
     path("api/salesperson/login/", SalespersonLoginView.as_view(), name="salesperson_login"),
     path("api/admin/create/", CreateUserView.as_view(), name="create_admin"),
     path("api/logout/", LogoutView.as_view(), name="logout"),

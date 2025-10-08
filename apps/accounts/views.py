@@ -58,7 +58,7 @@ class AdminLoginView(BaseAPIView):
             return JsonResponse({'success': False, 'error': 'Username and password are required'}, status=400)
         
         user = authenticate(request, username=username, password=password)
-        if user and user.role == "ADMIN":
+        if user :
             tokens = get_tokens_for_user(user)
             return JsonResponse({
                 'success': True,
