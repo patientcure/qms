@@ -435,63 +435,69 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
 class QuotationListView(JWTAuthMixin, BaseAPIView):
     def get(self, request):
         user = request.user
-        quotations = Quotation.objects.select_related(
-            'customer', 'assigned_to'
-        ).prefetch_related(
-            'terms', 'details__product'
-        )
+        try:
+            quotations = Quotation.objects.select_related(
+                'customer', 'assigned_to'
+            ).prefetch_related(
+                'terms', 'details__product'
+            )
 
-        quotations = quotations.exclude(Q(file_url__isnull=True) | Q(file_url=''))
-        if user.role == 'SALESPERSON':
-            quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
+            quotations = quotations.exclude(Q(file_url__isnull=True) | Q(file_url=''))            
+            if hasattr(user, 'role') and user.role == 'SALESPERSON':
+                quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
+            else:
+                logger.info(f"User '{user.username}' is not a salesperson (or is admin). Showing all quotations.")
+            
+            data = []
+            for quotation in quotations:
+                data.append({
+                    'id': quotation.id,
+                    'quotation_number': quotation.quotation_number,
+                    'status': quotation.status,
+                    'url': quotation.file_url,
+                    'discount': float(quotation.discount) if quotation.discount else 0.0,
+                    'discount_type': quotation.discount_type,
+                    'subtotal': float(quotation.subtotal),
+                    'tax_rate': float(quotation.tax_rate), 
+                    'total': float(quotation.total),
+                    'terms': [
+                        {
+                            'id': term.id,
+                            'title': term.title,
+                        }
+                        for term in quotation.terms.all()
+                    ],   
+                    'customer': {
+                        'id': quotation.customer.id,
+                        'name': quotation.customer.name,
+                        'email': quotation.customer.email,
+                        'phone': quotation.customer.phone,
+                        'company_name': quotation.customer.company_name,
+                        'address': quotation.customer.primary_address
+                    },
+                    'products':[
+                        {
+                            'id': item.id,
+                            'product_id': item.product.id,
+                            'name' : item.product.name,
+                            'selling_price': float(item.selling_price),
+                            'quantity': item.quantity,
+                            'percentage_discount': float(item.discount) if item.discount else 0.0,
+                            'description': item.product.description if hasattr(item.product, 'description') else '',
+                        } for item in quotation.details.all() 
+                    ],
+                    'assigned_to': {
+                        'id': quotation.assigned_to.id if quotation.assigned_to else None,
+                        'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
+                    },
+                    'created_at': quotation.created_at,
+                    'emailed_at': quotation.emailed_at,
+                    'follow_up_date': quotation.follow_up_date,
+                })           
+            return JsonResponse({'data': data})
         
-        data = []
-        for quotation in quotations:
-            data.append({
-                'id': quotation.id,
-                'quotation_number': quotation.quotation_number,
-                'status': quotation.status,
-                'url': quotation.file_url,
-                'discount': float(quotation.discount) if quotation.discount else 0.0,
-                'discount_type': quotation.discount_type,
-                'subtotal': float(quotation.subtotal),
-                'tax_rate': float(quotation.tax_rate), 
-                'total': float(quotation.total),
-                'terms': [
-                    {
-                        'id': term.id,
-                        'title': term.title,
-                    }
-                    for term in quotation.terms.all()
-                ],   
-                'customer': {
-                    'id': quotation.customer.id,
-                    'name': quotation.customer.name,
-                    'email': quotation.customer.email,
-                    'phone': quotation.customer.phone,
-                    'company_name': quotation.customer.company_name,
-                    'address': quotation.customer.primary_address
-                },
-                'products':[
-                    {
-                        'id': item.id,
-                        'product_id': item.product.id,
-                        'name' : item.product.name,
-                        'selling_price': float(item.selling_price),
-                        'quantity': item.quantity,
-                        'percentage_discount': float(item.discount) if item.discount else 0.0,
-                        'description': item.product.description if hasattr(item.product, 'description') else '',
-                    } for item in quotation.details.all() 
-                ],
-                'assigned_to': {
-                    'id': quotation.assigned_to.id if quotation.assigned_to else None,
-                    'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
-                },
-                'created_at': quotation.created_at,
-                'emailed_at': quotation.emailed_at,
-                'follow_up_date': quotation.follow_up_date,
-            })
-        return JsonResponse({'data': data}) 
+        except Exception as e:
+            return JsonResponse({'error': 'An internal server error occurred.'}, status=500)
        
 class QuotationPDFView(BaseAPIView):
     def get(self, request, quotation_id):
