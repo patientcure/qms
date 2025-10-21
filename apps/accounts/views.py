@@ -56,7 +56,18 @@ class AdminLoginView(BaseAPIView):
         
         if not username or not password:
             return JsonResponse({'success': False, 'error': 'Username and password are required'}, status=400)
-        
+        user_account = User.objects.filter(username=username).first()
+                
+        if not user_account:
+            # User not found. Give generic error.
+            return JsonResponse({'success': False, 'error': 'Invalid credentials'}, status=401)
+            
+        # 2. Check if the user is deactivated
+        if not user_account.is_active:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Your account has been deactivated. Please contact the administrator.'
+            }, status=403) # 403 Forbidden is more appropriate    
         user = authenticate(request, username=username, password=password)
         if user :
             tokens = get_tokens_for_user(user)
@@ -110,7 +121,7 @@ class SalespersonLoginView(BaseAPIView):
             return JsonResponse({'success': False, 'error': 'Invalid credentials or insufficient permissions'}, status=401)
 
 #region Create
-class CreateUserView(BaseAPIView):
+class CreateUserView(AdminRequiredMixin, BaseAPIView):
     def post(self, request):
         data = request.json or request.POST
         username = data.get("username")
@@ -176,36 +187,25 @@ class CreateUserView(BaseAPIView):
                 'error': f'Failed to create user: {str(e)}'
             }, status=400)
         
-class DeleteUserView(APIView):
+class DeleteUserView(AdminRequiredMixin, APIView):
     def delete(self, request, user_id):
-        print("Request user:", request.user)
-        print("Role:", getattr(request.user, "role", None))
-        if request.user.role != "ADMIN":
-
-            return JsonResponse({
-                'success': False,
-                'error': 'Permission denied. Administrator access required.'
-            }, status=403)
-        
         user = get_object_or_404(User, pk=user_id)
         
+        # Prevent admin from deleting themselves
+        if user.id == request.user.id:
+            return JsonResponse({
+                'success': False,
+                'error': 'You cannot delete your own account.'
+            }, status=403)
+            
         user.delete()
         return JsonResponse({
             'success': True,
             'message': f'User {user.username} deleted successfully'
         })
 
-class UserListView(APIView):
-
-    permission_classes = [IsAuthenticated]
-
+class UserListView(AdminRequiredMixin, APIView):
     def get(self, request):
-        if request.user.role != "ADMIN":
-            return JsonResponse({
-                'success': False,
-                'error': 'Permission denied. Administrator access required.'
-            }, status=403)
-        
         users = User.objects.all().order_by('first_name', 'last_name')        
         data = [{
             'id': user.id,
@@ -273,9 +273,6 @@ class CheckTokenValidityView(APIView):
 
 # ========== Password Management API ==========
 class ChangePasswordView(APIView):
-    """
-    An endpoint for changing password.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
@@ -289,22 +286,18 @@ class ChangePasswordView(APIView):
                 'error': 'Old password and new password are required.'
             }, status=400)
 
-        # Check old password
         if not user.check_password(old_password):
             return JsonResponse({
                 'success': False, 
                 'error': 'Your old password was entered incorrectly. Please enter it again.'
             }, status=400)
         
-        # validate password
         if len(new_password) < 6:
              return JsonResponse({
                 'success': False,
-                'error': 'Password must be at least 8 characters long.'
+                'error': 'Password must be at least 6 characters long.'
             }, status=400)
 
-
-        # set_password also hashes the password that the user will get
         user.set_password(new_password)
         user.save()
         return JsonResponse({'success': True, 'message': 'Password updated successfully'})
@@ -315,7 +308,6 @@ class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
     def put(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
         
-
         changes = []
         
         status = request.json.get("status")
@@ -518,3 +510,58 @@ class EditUserView(APIView):
                 'success': False,
                 'error': 'No changes detected.'
             }, status=400)
+
+class AdminManageUserView(AdminRequiredMixin, BaseAPIView):
+    def put(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id)
+        data = request.json
+        
+        allowed_fields = ['first_name', 'last_name', 'email', 'address', 'phone_number', 'username']
+        updated_fields = []
+
+        for field in allowed_fields:
+            if field in data and getattr(user, field) != data[field]:
+                setattr(user, field, data[field])
+                updated_fields.append(field)
+        
+        # Handle password change
+        if 'password' in data and data['password']:
+            if len(data['password']) < 6:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Password must be at least 6 characters long.'
+                }, status=400)
+            user.set_password(data['password'])
+            updated_fields.append('password')
+
+        # Handle activation/deactivation
+        if 'is_active' in data and user.is_active != data['is_active']:
+            # Prevent admin from deactivating themselves
+            if user.id == request.user.id and not data['is_active']:
+                 return JsonResponse({
+                    'success': False,
+                    'error': 'You cannot deactivate your own account.'
+                }, status=403)
+            user.is_active = data['is_active']
+            updated_fields.append('is_active')
+
+        if not updated_fields:
+            return JsonResponse({'success': False, 'error': 'No changes provided.'}, status=400)
+
+        try:
+            user.save()
+            
+            response_data = {
+                'id': user.id, 'username': user.username, 'email': user.email,
+                'role': user.role, 'phone_number': user.phone_number, 'address': user.address,
+                'first_name': user.first_name, 'last_name': user.last_name,
+                'is_active': user.is_active, 'date_joined': user.date_joined,
+            }
+            return JsonResponse({
+                'success': True,
+                'message': f'User "{user.username}" updated successfully. Fields changed: {", ".join(updated_fields)}',
+                'data': response_data
+            })
+        except Exception as e:
+            # Handle potential integrity errors (e.g., duplicate email/username)
+            return JsonResponse({'success': False, 'error': f'Failed to save user: {str(e)}'}, status=400)

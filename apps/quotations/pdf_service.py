@@ -158,6 +158,7 @@ class QuotationPDFGenerator:
         if customer.email: info.append(f"<b>Email:</b> {customer.email}")
         if customer.phone: info.append(f"<b>Phone:</b> {customer.phone}")
         if customer.primary_address: info.append(f"<b>Address:</b> {customer.primary_address}")
+        if customer.gst_number: info.append(f"<b>GST Number:</b> {customer.gst_number}")
 
         customer_table = Table(
             [[Paragraph("<br/>".join(info), self.normal_style)]],
@@ -238,18 +239,25 @@ class QuotationPDFGenerator:
                 overall_discount_amount = subtotal_after_item_disc * (overall_discount_value / 100)
                 discount_label = f'Special Discount ({overall_discount_value}%):'
         subtotal_after_all_discounts = subtotal_after_item_disc - overall_discount_amount
+        additional_charge_amount = self._to_decimal(getattr(self.quotation, 'additional_charge_amount', 0))
+        additional_charge_name = getattr(self.quotation, 'additional_charge_name', 'Additional Charges') or 'Additional Charges'
+        subtotal_before_tax = subtotal_after_all_discounts + additional_charge_amount
+        
         tax_rate = self._to_decimal(getattr(self.quotation, 'tax_rate', 0))
-        tax_label, tax_amount = 'Tax:', Decimal('0.00')
-        if tax_rate > 0:
-            tax_amount = subtotal_after_all_discounts * (tax_rate / 100)
-            tax_label = f'Tax ({tax_rate}%):'
-        grand_total = subtotal_after_all_discounts + tax_amount
+        tax_amount = subtotal_before_tax * (tax_rate / 100)
+        tax_label = f'Tax ({tax_rate}%):' if tax_rate > 0 else 'Tax:'
+
+        grand_total = subtotal_before_tax + tax_amount
 
         totals_data = [
             ['Subtotal:', self._format_currency(subtotal_after_item_disc)],
         ]       
         if overall_discount_amount > 0:
-            totals_data.append([discount_label, f"- {self._format_currency(overall_discount_amount)}"])       
+            totals_data.append([discount_label, f"- {self._format_currency(overall_discount_amount)}"])
+
+        if additional_charge_amount > 0:
+            totals_data.append([f'{additional_charge_name}:', self._format_currency(additional_charge_amount)])
+        
         totals_data.extend([
             [tax_label, self._format_currency(tax_amount)],
             ['Total Amount:', self._format_currency(grand_total)],

@@ -8,7 +8,12 @@ from apps.quotations.utils import generate_next_quotation_number
 User = settings.AUTH_USER_MODEL
 from crum import get_current_user
 from apps.accounts.models import User,Roles
-
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from apps.accounts.models import User,Roles
+from .permissions import PERMISSIONS_MAP
+def get_default_permissions():
+    return PERMISSIONS_MAP.copy()
 
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -160,6 +165,8 @@ class Quotation(TimestampedModel):
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     tax_rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    additional_charge_name = models.CharField(max_length=100, blank=True, null=True, default="Additional Charges")
+    additional_charge_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), blank=True, null=True)
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), blank=True, null=True)
     emailed_at = models.DateTimeField(null=True, blank=True)
     lead_id = models.IntegerField(null=True, blank=True)
@@ -260,3 +267,24 @@ class ActivityLog(TimestampedModel):
             message=message,
             customer = customer,
         )
+    
+class SalespersonPermission(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='permissions',
+        limit_choices_to={'role': Roles.SALESPERSON}
+    )
+    permissions = models.JSONField(default=get_default_permissions, blank=True)
+
+    def __str__(self):
+        return f"Permissions for {self.user.get_full_name()}"
+
+    class Meta:
+        verbose_name = "Salesperson Permission"
+        verbose_name_plural = "Salesperson Permissions"
+
+@receiver(post_save, sender=User)
+def create_salesperson_permissions(sender, instance, created, **kwargs):
+    if created and instance.role == Roles.SALESPERSON:
+        SalespersonPermission.objects.create(user=instance)

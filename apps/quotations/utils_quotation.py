@@ -104,19 +104,22 @@ def calculate_totals_from_details(quotation):
             overall_discount_amount = subtotal_after_item_disc * (discount / Decimal('100.00'))
     
     subtotal_after_all_discounts = subtotal_after_item_disc - overall_discount_amount
+    additional_charge = quotation.additional_charge_amount or Decimal('0.00')
+    subtotal_before_tax = subtotal_after_all_discounts + additional_charge
 
     # Step 4: Apply tax on net (after all discounts)
     tax_rate = quotation.tax_rate or Decimal('0.00')
-    tax_amount = subtotal_after_all_discounts * (tax_rate / Decimal('100.00'))
+    tax_amount = subtotal_before_tax * (tax_rate / Decimal('100.00'))
 
-    # Step 5: Final total = discounted subtotal + tax
-    final_total = subtotal_after_all_discounts + tax_amount
+    # Step 5: Final total = (discounted subtotal + additional charges) + tax
+    final_total = subtotal_before_tax + tax_amount
 
     return {
         'subtotal': subtotal_after_item_disc.quantize(Decimal('0.01')),
         'total': final_total.quantize(Decimal('0.01')),
         'item_discount': total_item_discount.quantize(Decimal('0.01')),
         'overall_discount': overall_discount_amount.quantize(Decimal('0.01')),
+        'additional_charge': additional_charge.quantize(Decimal('0.01')),
         'tax': tax_amount.quantize(Decimal('0.01')),
     }
 
@@ -168,6 +171,8 @@ def get_quotation_response_data(quotation, lead, term_ids=None):
             'total': float(quotation.total),
             'discount': float(quotation.discount or 0.0),
             'discount_type': quotation.discount_type,
+            'additional_charge_name': quotation.additional_charge_name,
+            'additional_charge_amount': float(quotation.additional_charge_amount or 0.0),
             'currency': quotation.currency,
             'customer': {
                 'id': quotation.customer.id, 

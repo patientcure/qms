@@ -12,7 +12,9 @@ class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
         fields = ["name", "company_name", "email", "phone", "gst_number","title","website","primary_address","billing_address","shipping_address"]
-
+        extra_kwargs = {
+            'email': {'required': False}
+        }
 class ProductForm(forms.ModelForm):
     discount = forms.DecimalField(required=False, max_digits=10, decimal_places=2, initial=0)
     class Meta:
@@ -43,7 +45,8 @@ class QuotationForm(forms.ModelForm):
         model = Quotation
         fields = [
             'assigned_to', 'terms', 'email_template', 'discount',
-            'follow_up_date','status','discount_type', 'tax_rate','additionalNotes'
+            'follow_up_date','status','discount_type', 'tax_rate','additionalNotes',
+            'additional_charge_name', 'additional_charge_amount'
         ]
     
     def __init__(self, *args, **kwargs):
@@ -57,6 +60,8 @@ class QuotationForm(forms.ModelForm):
         self.fields['discount_type'].required = False
         self.fields['discount'].required = False
         self.fields['additionalNotes'].required = False
+        self.fields['additional_charge_name'].required = False
+        self.fields['additional_charge_amount'].required = False
         
 class SalespersonForm(UserCreationForm):
     first_name = forms.CharField(required=True)

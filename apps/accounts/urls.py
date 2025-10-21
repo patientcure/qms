@@ -1,4 +1,5 @@
 from django.urls import path
+from apps.quotations.permission_views import AdminManagePermissionsView, MyPermissionsView
 from .views import (
     AdminLoginView,
     SalespersonLoginView,
@@ -12,7 +13,8 @@ from .views import (
     ToggleUserType,
     ChangePasswordView,
     CheckTokenValidityView,
-    EditUserView
+    EditUserView,
+    AdminManageUserView
 )
 
 app_name = "accounts"
@@ -27,7 +29,7 @@ urlpatterns = [
     path("api/users/", UserListView.as_view(), name="user_list"),
     path("api/users/<int:user_id>/delete/", DeleteUserView.as_view(), name="delete_user"),
     path("api/token/verify/", CheckTokenValidityView.as_view(), name="check_token_validity"),
-
+    path("api/user/<int:user_id>/manage/", AdminManageUserView.as_view(), name="admin_manage_user"),
 
     # ========== Password Management API ==========
     path("api/user/change-password/", ChangePasswordView.as_view(), name="change_password"),
@@ -38,6 +40,9 @@ urlpatterns = [
     path("api/leads/<int:lead_id>/status/", LeadStatusUpdateView.as_view(), name="update_lead_status"),
 
     path("api/<int:user_id>/toggleUser/",ToggleUserType.as_view(),name="toggle_user"),
-    path("api/users/<int:user_id>/edit/", EditUserView.as_view(), name="edit_user")
+    path("api/users/<int:user_id>/edit/", EditUserView.as_view(), name="edit_user"),    
+
+    path("api/salespeople/<int:user_id>/permissions/", AdminManagePermissionsView.as_view(), name="manage_permissions"),
+    path("api/user/my-permissions/", MyPermissionsView.as_view(), name="my_permissions"),
 
 ]

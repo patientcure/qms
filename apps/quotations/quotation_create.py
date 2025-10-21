@@ -177,7 +177,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
 
         except Exception as e:
             logger.error(f"Unexpected error in POST: {e}\n{traceback.format_exc()}")
-            return JsonResponse({"success": False, "error": "Internal server error"}, status=500)
+            return JsonResponse({f"success": False, "error": "Internal server error : {e}"}, status=500)
 
 
     @transaction.atomic

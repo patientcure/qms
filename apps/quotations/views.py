@@ -415,13 +415,10 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
         assigned_to_id = request.json.get('assigned_to_id') or request.POST.get('assigned_to_id')
         
         if assigned_to_id:
-            salesperson = get_object_or_404(User, pk=assigned_to_id, role=Roles.SALESPERSON)
+            salesperson = get_object_or_404(User, pk=assigned_to_id, role__in=[Roles.SALESPERSON, Roles.ADMIN])
             lead.assigned_to = salesperson
             message = f"Lead assigned to {salesperson.get_full_name()}"
-        else:
-            lead.assigned_to = None
-            message = "Lead assignment removed"
-            
+
         lead.save()
         return JsonResponse({
             'success': True, 
@@ -447,31 +444,7 @@ class QuotationListView(JWTAuthMixin, BaseAPIView):
         quotations = quotations.exclude(Q(file_url__isnull=True) | Q(file_url=''))
         if user.role == 'SALESPERSON':
             quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
-
-        # Get activity logs for the filtered quotations
-        # quotation_ids = quotations.values_list('id', flat=True)
-        # activity_logs = ActivityLog.objects.filter(
-        #     entity_type='Quotation',
-        #     entity_id__in=[str(qid) for qid in quotation_ids]
-        # ).select_related('actor').order_by('-created_at')
         
-        # # Group logs by entity_id
-        # logs_by_quotation = {}
-        # for log in activity_logs:
-        #     quotation_id = int(log.entity_id)
-        #     if quotation_id not in logs_by_quotation:
-        #         logs_by_quotation[quotation_id] = []
-        #     logs_by_quotation[quotation_id].append({
-        #         'id': log.id,
-        #         'action': log.action,
-        #         'message': log.message,
-        #         'actor': {
-        #             'id': log.actor.id if log.actor else None,
-        #             'name': log.actor.get_full_name() if log.actor else 'System'
-        #         },
-        #         'created_at': log.created_at
-        #     })
-
         data = []
         for quotation in quotations:
             data.append({
@@ -517,17 +490,12 @@ class QuotationListView(JWTAuthMixin, BaseAPIView):
                 'created_at': quotation.created_at,
                 'emailed_at': quotation.emailed_at,
                 'follow_up_date': quotation.follow_up_date,
-                # 'activity_logs': logs_by_quotation.get(quotation.id, [])[:10]  # Latest 10 activities
             })
         return JsonResponse({'data': data}) 
        
 class QuotationPDFView(BaseAPIView):
     def get(self, request, quotation_id):
         quotation = get_object_or_404(Quotation, pk=quotation_id)
-        
-        # Check permission
-        # if request.user.role == Roles.SALESPERSON and quotation.assigned_to != request.user:
-        #     return JsonResponse({'error': 'Permission denied'}, status=403)
         
         try:
             pdf_url = save_quotation_pdf(quotation, request)
@@ -612,18 +580,20 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
         assigned_to_id = request.json.get('assigned_to_id') or request.POST.get('assigned_to_id')
         
         if assigned_to_id:
-            salesperson = get_object_or_404(User, pk=assigned_to_id, role=Roles.SALESPERSON)
+            salesperson = get_object_or_404(User, pk=assigned_to_id, role__in=[Roles.SALESPERSON, Roles.ADMIN])
             quotation.assigned_to = salesperson
             message = f"Quotation assigned to {salesperson.get_full_name()}"
-        else:
-            quotation.assigned_to = None
-            message = "Quotation assignment removed"
+        # else:
+        #     quotation.assigned_to = None
+        #     message = "Quotation assignment removed"
             
         quotation.save()
         
+        log_action = ActivityAction.LEAD_ASSIGNED if assigned_to_id else ActivityAction.LEAD_UPDATED
+        
         ActivityLog.log(
             actor=request.user,
-            action=ActivityAction.QUOTATION_ASSIGNED if assigned_to_id else ActivityAction.QUOTATION_UNASSIGNED,
+            action=log_action,
             entity=quotation,
             message=message,
             customer = quotation.customer,
