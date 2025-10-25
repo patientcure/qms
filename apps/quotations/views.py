@@ -437,17 +437,38 @@ class QuotationListView(JWTAuthMixin, BaseAPIView):
         user = request.user
         try:
             quotations = Quotation.objects.select_related(
-                'customer', 'assigned_to'
+                'customer', 'assigned_to', 'created_by'
             ).prefetch_related(
                 'terms', 'details__product'
             )
 
             quotations = quotations.exclude(Q(file_url__isnull=True) | Q(file_url=''))            
-            if hasattr(user, 'role') and user.role == 'SALESPERSON':
+            if getattr(user, "role", None) == Roles.SALESPERSON:
                 quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
             else:
                 logger.info(f"User '{user.username}' is not a salesperson (or is admin). Showing all quotations.")
+
+            quotation_ids = quotations.values_list("id", flat=True)
             
+            activity_logs = ActivityLog.objects.filter(
+                entity_type="Quotation",
+                entity_id__in=[str(qid) for qid in quotation_ids]
+            ).select_related("actor").order_by("-created_at")
+            logs_by_quotation = {}
+            for log in activity_logs:
+                quotation_id = int(log.entity_id)
+                if quotation_id not in logs_by_quotation:
+                    logs_by_quotation[quotation_id] = []
+                logs_by_quotation[quotation_id].append({
+                    "id": log.id,
+                    "action": log.action,
+                    "message": log.message,
+                    "actor": {
+                        "id": log.actor.id if log.actor else None,
+                        "name": log.actor.get_full_name() if log.actor else "System"
+                    },
+                    "created_at": log.created_at
+                })
             data = []
             for quotation in quotations:
                 data.append({
@@ -490,10 +511,15 @@ class QuotationListView(JWTAuthMixin, BaseAPIView):
                         'id': quotation.assigned_to.id if quotation.assigned_to else None,
                         'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
                     },
+                    'created_by': {
+                        'id': quotation.created_by.id if quotation.created_by else None,
+                        'name': quotation.created_by.get_full_name() if quotation.created_by else None
+                    },
                     'created_at': quotation.created_at,
                     'emailed_at': quotation.emailed_at,
                     'follow_up_date': quotation.follow_up_date,
-                })           
+                    'activity_logs': logs_by_quotation.get(quotation.id, [])[:10],
+                })
             return JsonResponse({'data': data})
         
         except Exception as e:
