@@ -22,7 +22,7 @@ from .forms import (
     QuotationForm,
     CustomerForm, ProductForm
 )
-from .choices import ActivityAction,QuotationStatus
+from .choices import ActivityAction,QuotationStatus,LeadStatus
 from .serializers import CategorySerializer
 from rest_framework import viewsets
 from django.http import JsonResponse
@@ -193,12 +193,19 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
 class LeadListView(JWTAuthMixin, BaseAPIView):
     def get(self, request):
         user = request.user
+        lead_filter = request.GET.get('filter', 'active')
 
         # Base queryset with related objects
         leads = Lead.objects.select_related(
             "customer", "assigned_to", "created_by"
         )
-
+        if lead_filter == 'converted':
+            leads = leads.filter(status=LeadStatus.CONVERTED)
+        else:
+            # 'active' means all leads that are NOT converted
+            leads = leads.exclude(status=LeadStatus.CONVERTED)
+        # If lead_filter is something else (e.g., 'all'), we just get all leads
+        
         # Restrict SALESPERSON to only their own leads
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
@@ -234,7 +241,6 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
                 "created_at": log.created_at
             })
 
-        # Serialize leads
         data = [self.serialize_lead(lead, quotation_map, logs_by_lead) for lead in leads]
 
         return JsonResponse({"data": data}, status=200, safe=False)
@@ -268,9 +274,8 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
             "created_at": lead.created_at,
             "updated_at": lead.updated_at,
             "created_by": lead.created_by.get_full_name() if lead.created_by else None,
-            "activity_logs": logs_by_lead.get(lead.id, [])[:10],  # Latest 10 activities
+            "activity_logs": logs_by_lead.get(lead.id, []),  # Latest 10 activities
         }
-
 
 
 class LeadCreateView(JWTAuthMixin, BaseAPIView):
