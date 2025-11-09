@@ -288,3 +288,12 @@ class SalespersonPermission(models.Model):
 def create_salesperson_permissions(sender, instance, created, **kwargs):
     if created and instance.role == Roles.SALESPERSON:
         SalespersonPermission.objects.create(user=instance)
+
+
+class ProductImage(TimestampedModel):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    quotation = models.ForeignKey(Quotation, on_delete=models.SET_NULL, null=True, blank=True, related_name='product_images')
+    image = models.ImageField(upload_to='product_images/')
+
+    def __str__(self):
+        return f"Image for {self.product.name}"

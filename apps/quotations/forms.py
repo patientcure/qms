@@ -1,5 +1,5 @@
 from django import forms
-from .models import Customer, Product, Quotation, TermsAndConditions, EmailTemplate, ProductDetails
+from .models import Customer, Product, Quotation, TermsAndConditions, EmailTemplate, ProductDetails,ProductImage
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from .models import Lead, Customer
@@ -173,3 +173,13 @@ class LeadForm(forms.ModelForm):
         if commit:
             lead.save()
         return lead
+    
+
+class ProductImageForm(forms.ModelForm):
+    class Meta:
+        model = ProductImage
+        fields = ['product', 'quotation', 'image']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['quotation'].required = False

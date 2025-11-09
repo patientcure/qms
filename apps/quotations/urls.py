@@ -10,6 +10,7 @@ from .terms_views import (
 from .duplicate import DuplicateQuotationAPIView
 from .quotation_create import QuotationCreate
 from .merge_pdf import MergePDFsAPIView
+from .product_image_view import ProductImageUploadView
 from .views import (
     # Salesperson Management
     SalespersonListView,
@@ -48,6 +49,7 @@ from .views import (
     # Product & Customer Search
     ProductSearchView,
     CustomerSearchView,
+    FilteredCustomerListView,
     UserStatsView
     
     
@@ -98,6 +100,7 @@ urlpatterns = [
     path('api/customers/create/', CustomerCreateView.as_view(), name='customer_create'),
     path('api/customers/<int:customer_id>/', CustomerDetailView.as_view(), name='customer_detail'),
     path('api/customers/search/', CustomerSearchView.as_view(), name='customer_search'),
+    path('api/customers/filtered/', FilteredCustomerListView.as_view(), name='customer_filtered_list'),
     
     # ========== Dashboard Stats API ==========
     path('api/dashboard/admin/stats/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
@@ -110,5 +113,8 @@ urlpatterns = [
     path('api/terms/<int:id>/update/', TermUpdateView.as_view(), name='terms-update'),
     path('api/terms/<int:id>/delete/', TermDeleteView.as_view(), name='terms-delete'),
     path('api/merge/', MergePDFsAPIView.as_view(), name='merge_pdfs'),
-    path('api/<int:user_id>/stats/',UserStatsView.as_view(),name="user-stats")
+    path('api/<int:user_id>/stats/',UserStatsView.as_view(),name="user-stats"),
+
+
+    path('api/product/image/', ProductImageUploadView.as_view(), name='product_image_upload'),
 ]

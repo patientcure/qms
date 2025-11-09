@@ -14,7 +14,7 @@ from django.db.models import ProtectedError
 import json
 from apps.accounts.models import User, Roles
 from .models import (
-    Quotation, Lead, Customer, Product,
+    Quotation, Lead, Customer, Product,ProductImage,
     TermsAndConditions, CompanyProfile, ActivityLog,Category
 )
 from .forms import (
@@ -37,6 +37,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 from datetime import datetime
 from django.db.models import Count, Q, Case, When, F, FloatField
+from django.db.models.deletion import ProtectedError
 
 class JWTAuthMixin:
     """Base mixin to authenticate requests using JWT access token."""
@@ -199,7 +200,7 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
         leads = Lead.objects.select_related(
             "customer", "assigned_to", "created_by"
         )
-        if lead_filter == 'converted':
+        if lead_filter != 'converted':
             leads = leads.filter(status=LeadStatus.CONVERTED)
         else:
             # 'active' means all leads that are NOT converted
@@ -676,7 +677,8 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
                         file_url = Quotation.objects.get(pk=lead.quotation_id).file_url
                     except Quotation.DoesNotExist:
                         pass
-
+                if lead.status == LeadStatus.CONVERTED:
+                    continue
                 leads_data.append({
                     'id': lead.id,
                     'status': lead.status,
@@ -861,7 +863,7 @@ class AllCustomerListView(JWTAuthMixin,BaseAPIView):
             })
         return JsonResponse({'data': data})
     
-class CustomerCreateView( BaseAPIView):
+class CustomerCreateView(JWTAuthMixin,BaseAPIView):
 
     def _parse_request_data(self, request):
         if request.content_type == 'application/json':
@@ -933,13 +935,11 @@ class CustomerCreateView( BaseAPIView):
 
         return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     def delete(self, request):
-        """Handles the permanent deletion of a customer."""
         customer_id = request.GET.get('id')
         if not customer_id:
             return JsonResponse({'error': 'Customer ID is required.'}, status=400)
 
         try:
-            # Use .get() to provide a specific 404 response
             customer = Customer.objects.get(pk=customer_id)
             customer_id_to_confirm = customer.id
             customer.delete()
@@ -952,9 +952,10 @@ class CustomerCreateView( BaseAPIView):
         except ProtectedError:
             return JsonResponse({
                 'error': f'Customer with ID {customer_id} cannot be deleted because they are associated with existing leads or quotations.'
-            }, status=409) # 409 Conflict status code is appropriate
+            }, status=409)
         except Exception as e:
-            # Catch any other unexpected errors
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
 
 class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
@@ -1039,16 +1040,21 @@ class CustomerSearchView(BaseAPIView):
 #region Product Management
 class ProductListView(BaseAPIView):
     def get(self, request):
-        products = Product.objects.all()
+        products = Product.objects.all().prefetch_related('images')        
         data = []
         for product in products:
+            image_urls = [
+                request.build_absolute_uri(image.image.url)
+                for image in product.images.all()
+            ]
             data.append({
                 'id': product.id,
                 'name': product.name,
                 'category': product.category.name if product.category else None,
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
-                'unit': product.unit,
+                'unit': product.unit,                
+                'images': image_urls,                
                 'description': product.description,
                 'is_available': product.is_available,
                 'active': product.active,
