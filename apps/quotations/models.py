@@ -44,6 +44,9 @@ class Customer(TimestampedModel):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50,unique=True)
     gst_number = models.CharField(max_length=30, blank=True)
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True,blank=True, related_name="customers_created"
+    )
 
     class Meta:
         indexes = [

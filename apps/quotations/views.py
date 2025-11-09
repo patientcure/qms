@@ -996,7 +996,87 @@ class CustomerDetailView(AdminRequiredMixin, BaseAPIView):
             }
         })
 
+class FilteredCustomerListView(JWTAuthMixin, BaseAPIView):
+    def get(self, request):
+        user = getattr(request, 'user', None)
+        try:
+            if user and getattr(user, 'role', None) == Roles.SALESPERSON:
+                logger.debug(
+                    "FilteredCustomerListView: building queryset for salesperson",
+                    extra={"user_id": user.id, "username": getattr(user, "username", None)}
+                )
+                customers_qs = Customer.objects.filter(
+                    Q(leads__assigned_to=user)
+                    | Q(leads__created_by=user)
+                    | Q(quotations__assigned_to=user)
+                    | Q(quotations__created_by=user)
+                    | Q(created_by=user)
+                ).distinct()
+            else:
+                logger.debug(
+                    "FilteredCustomerListView: fetching all customers (non-salesperson or admin)",
+                    extra={"user_id": getattr(user, "id", None)}
+                )
+                customers_qs = Customer.objects.all()
 
+            customers = customers_qs.order_by('-created_at')
+            data = []
+            for c in customers:
+                data.append({
+                    'id': c.id,
+                    'name': c.name,
+                    'company_name': c.company_name,
+                    'primary_address': c.primary_address,
+                    'email': c.email,
+                    'phone': c.phone,
+                    'created_at': c.created_at.isoformat() if c.created_at else None,
+                })
+
+            logger.info(
+                "FilteredCustomerListView: returning customers",
+                extra={"user_id": getattr(user, "id", None), "count": len(data)}
+            )
+            return JsonResponse({'data': data}, safe=False)
+
+        except Exception as e:
+            logger.exception(
+                "FilteredCustomerListView: unexpected error while fetching customers for user_id=%s",
+                getattr(user, "id", None)
+            )
+            return JsonResponse({'error': 'An internal server error occurred.'}, status=500)
+
+class UnfilteredCustomerListView(JWTAuthMixin, BaseAPIView):
+    """Returns all customers without any role-based filtering. Requires authentication."""
+    
+    def get(self, request):
+        try:
+            customers = Customer.objects.all().order_by('-created_at')
+            
+            data = []
+            for customer in customers:
+                data.append({
+                    'id': customer.id,
+                    'name': customer.name,
+                    'email': customer.email,
+                    'phone': customer.phone,
+                    'company_name': customer.company_name,
+                    'gst_number': customer.gst_number,
+                    'website': customer.website,
+                    'shipping_address': customer.shipping_address,
+                    'billing_address': customer.billing_address,
+                    'primary_address': customer.primary_address,
+                    'title': customer.title,
+                    'created_at': customer.created_at.isoformat() if customer.created_at else None,
+                })
+
+            return JsonResponse({'success': True, 'data': data}, safe=False)
+        
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+        
 class ProductSearchView(JWTAuthMixin, BaseAPIView):
     def get(self, request):
         name = request.GET.get('name', '').strip()
