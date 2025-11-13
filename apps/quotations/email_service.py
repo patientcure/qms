@@ -40,7 +40,7 @@ def send_quotation_email(quotation: Quotation):
             body=plain_text,
             from_email=settings.DEFAULT_FROM_EMAIL,
             # to=[quotation.customer.email],
-            to = "naman@nkprosales.com"
+            to = ['naman@nkprosales.com']
         )
 
         try:

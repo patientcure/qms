@@ -11,6 +11,7 @@ from .duplicate import DuplicateQuotationAPIView
 from .quotation_create import QuotationCreate
 from .merge_pdf import MergePDFsAPIView
 from .product_image_view import ProductImageUploadView
+from .product_create_view import ProductCreateView
 from .views import (
     # Salesperson Management
     SalespersonListView,
@@ -38,7 +39,6 @@ from .views import (
     
     # Product Management
     ProductListView,
-    ProductCreateView,
     ProductDetailView,
     CategoryViewSet,
     
