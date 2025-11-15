@@ -1134,7 +1134,7 @@ class ProductListView(BaseAPIView):
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
                 'unit': product.unit,                
-                'images': image_urls,                
+                'images': request.build_absolute_uri(product.image.url),               
                 'description': product.description,
                 'is_available': product.is_available,
                 'active': product.active,

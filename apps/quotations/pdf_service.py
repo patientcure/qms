@@ -1,6 +1,13 @@
 # apps/quotations/pdf_service.py
 import io
 import re
+import os
+import requests
+from reportlab.platypus import Image as RLImage, Table as RLTable, Paragraph, Spacer, KeepTogether
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from decimal import Decimal
+
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from reportlab.lib.pagesizes import A4
@@ -174,7 +181,6 @@ class QuotationPDFGenerator:
         return elements
 
     def _build_items_table(self):
-        """Build items table with dynamic discount column."""
         has_any_discount = any(self._to_decimal(item.get('discount', 0)) > 0 for item in self.items_data)
 
         if has_any_discount:
@@ -187,6 +193,8 @@ class QuotationPDFGenerator:
         table_data = [headers]
         subtotal = Decimal('0')
         total_item_discount = Decimal('0')
+        max_img_w = 18 * mm
+        max_img_h = 18 * mm
 
         for idx, item in enumerate(self.items_data, 1):
             quantity = self._to_decimal(item.get('quantity', 1))
@@ -201,9 +209,48 @@ class QuotationPDFGenerator:
             total_item_discount += discount_amount
             description = item.get('description') or item.get('name', 'N/A')
 
+            # --- build product/service cell with optional image ---
+            product_cell = Paragraph(description, self.normal_style)
+
+            image_flowable = None
+            image_url = item.get('image_url') or item.get('image_path')  # accept either key
+            if image_url:
+                try:
+                    if str(image_url).lower().startswith(('http://', 'https://')):
+                        resp = requests.get(image_url, timeout=5)
+                        resp.raise_for_status()
+                        img_io = io.BytesIO(resp.content)
+                        image_flowable = RLImage(img_io, width=max_img_w, height=max_img_h, kind='proportional')
+                    else:
+                        # treat as local file path
+                        if os.path.exists(image_url):
+                            image_flowable = RLImage(image_url, width=max_img_w, height=max_img_h, kind='proportional')
+                except Exception:
+                    # silently ignore image errors and fall back to text only
+                    image_flowable = None
+
+            if image_flowable:
+                # Create a small two-column table: [image | description]
+                # ensure left column fits image, right column uses rest of the product column width
+                product_col_width = colWidths[1] if len(colWidths) > 1 else 68*mm
+                inner_colwidths = [max_img_w + 2*mm, product_col_width - (max_img_w + 2*mm)]
+                inner_table = RLTable(
+                    [[image_flowable, Paragraph(description, self.normal_style)]],
+                    colWidths=inner_colwidths,
+                    style=[
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                        ('TOPPADDING', (0, 0), (-1, -1), 0),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                    ]
+                )
+                product_cell = inner_table  # cell becomes the mini-table
+            # --- end image cell build ---
+
             row = [
                 Paragraph(str(idx), self.normal_style),
-                Paragraph(description, self.normal_style),
+                product_cell,
                 Paragraph(str(quantity), self.normal_style),
                 Paragraph(self._format_currency(unit_price), self.right_style),
             ]
