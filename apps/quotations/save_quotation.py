@@ -29,6 +29,7 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
                 'unit_price': str(unit_price),
                 'description': item.get('description', product.name),
                 'discount': item.get('discount', 0),
+                'image_url': request.build_absolute_uri(product.image.url) if product.image else None
             })
 
         company_profile = CompanyProfile.objects.first()

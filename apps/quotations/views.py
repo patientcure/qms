@@ -1123,10 +1123,9 @@ class ProductListView(BaseAPIView):
         products = Product.objects.all().prefetch_related('images')        
         data = []
         for product in products:
-            image_urls = [
-                request.build_absolute_uri(image.image.url)
-                for image in product.images.all()
-            ]
+            image_url = None
+            if product.image:
+                image_url = request.build_absolute_uri(product.image.url)
             data.append({
                 'id': product.id,
                 'name': product.name,
@@ -1134,7 +1133,7 @@ class ProductListView(BaseAPIView):
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
                 'unit': product.unit,                
-                'images': image_urls,                
+                'images': image_url,               
                 'description': product.description,
                 'is_available': product.is_available,
                 'active': product.active,
