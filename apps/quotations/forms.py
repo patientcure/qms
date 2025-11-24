@@ -93,7 +93,7 @@ class SalespersonForm(UserCreationForm):
     
 class LeadForm(forms.ModelForm):
     customer_name = forms.CharField(required=True)
-    customer_email = forms.EmailField(required=True)
+    customer_email = forms.EmailField(required=False)
     customer_phone = forms.CharField(required=True)
     customer_company = forms.CharField(required=False)
     customer_primary_address = forms.CharField(required=False)
