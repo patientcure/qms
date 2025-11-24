@@ -71,7 +71,7 @@ def send_quotation_email(quotation: Quotation):
         email.send(fail_silently=False)
 
         # --- Update quotation status ---
-        quotation.status = "SENT"
+        quotation.status = "PENDING"
         quotation.emailed_at = timezone.now()
         quotation.save(update_fields=["status", "emailed_at"])
 
