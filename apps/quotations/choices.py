@@ -85,6 +85,7 @@ class TaxType(models.TextChoices):
     NONE = 'NONE', _('No Tax')
 
 class LeadSource(models.TextChoices):
+    QUOTATION = 'QUOTATION', _('Quotation')
     WEBSITE = 'WEBSITE', _('Website')
     REFERRAL = 'REFERRAL', _('Referral')
     SOCIAL_MEDIA = 'SOCIAL_MEDIA', _('Social Media')

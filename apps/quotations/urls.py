@@ -52,11 +52,9 @@ from .views import (
     FilteredCustomerListView,
     UnfilteredCustomerListView,
     UserStatsView
-    
-    
-
-
 )
+from .lead_disc.views import LeadDescriptionManageView
+
 
 app_name = "quotations"
 
@@ -71,6 +69,9 @@ urlpatterns = [
     path('api/leads/create/', LeadCreateView.as_view(), name='lead_create'),
     path('api/leads/<int:lead_id>/', LeadDetailView.as_view(), name='lead_detail'),
     path('api/leads/<int:lead_id>/assign/', LeadAssignView.as_view(), name='lead_assign'),
+
+    # ============ Lead Description Management API ==========
+    path('api/leads/<int:lead_id>/descriptions/', LeadDescriptionManageView.as_view(), name='lead_description_manage'), 
     
     # ========== Quotation Management API ==========
     path('api/quotations/', QuotationListView.as_view(), name='quotation_list'),
@@ -115,7 +116,5 @@ urlpatterns = [
     path('api/terms/<int:id>/delete/', TermDeleteView.as_view(), name='terms-delete'),
     path('api/merge/', MergePDFsAPIView.as_view(), name='merge_pdfs'),
     path('api/<int:user_id>/stats/',UserStatsView.as_view(),name="user-stats"),
-
-
     path('api/product/image/', ProductImageUploadView.as_view(), name='product_image_upload'),
 ]

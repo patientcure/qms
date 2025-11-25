@@ -147,6 +147,16 @@ class Lead(TimestampedModel):
             .first()
         )
 
+class LeadDescription(TimestampedModel):
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='descriptions')
+    next_date = models.DateField(null=True,blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(max_length=2000,blank=True,null=True)
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="lead_descriptions_created"
+    )
+    def __str__(self):
+        return f"Description for Lead {self.lead.id}"
 
 class Quotation(TimestampedModel):
     quotation_number = models.CharField(max_length=30, unique=True, editable=False)
