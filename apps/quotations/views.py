@@ -360,33 +360,111 @@ class LeadCreateView(JWTAuthMixin, BaseAPIView):
                 'traceback': traceback.format_exc()
             }, status=500)
 
-class LeadDetailView(AdminRequiredMixin, BaseAPIView):
+class LeadDetailView(BaseAPIView):
     def get(self, request, lead_id):
         lead = get_object_or_404(Lead, pk=lead_id)
-        ActivityLog.log(
-            actor=request.user,
-            action=ActivityAction.LEAD_UPDATED,
-            entity=lead,
-            message=lead.status
-        )
-        return JsonResponse({
-            'data': {
-                'id': lead.id,
-                'status': lead.status,
-                'source':lead.lead_source,
-                'follow_up_date': lead.follow_up_date,
-                'notes': lead.notes,
-                'customer': {
-                    'id': lead.customer.id if lead.customer else None,
-                    'name': lead.customer.name if lead.customer else None
+        # try:
+        #     ActivityLog.log(
+        #         actor=getattr(request, 'user', None),
+        #         action=ActivityAction.LEAD_UPDATED,
+        #         entity=lead,
+        #         message=lead.status
+        #     )
+        # except Exception:
+        #     # Ensure logging failure does not break the response
+        #     logger.exception("Failed to log lead view action")
+
+        # # Activity logs for this lead (latest first)
+        activity_logs = ActivityLog.objects.filter(
+            entity_type="Lead",
+            entity_id=str(lead.id)
+        ).select_related('actor').order_by('-created_at')
+
+        logs = []
+        for log in activity_logs:
+            logs.append({
+                'id': log.id,
+                'action': log.action,
+                'message': log.message,
+                'actor': {
+                    'id': log.actor.id if log.actor else None,
+                    'name': log.actor.get_full_name() if log.actor else 'System',
+                    'email': log.actor.email if log.actor else None,
                 },
-                'assigned_to': {
-                    'id': lead.assigned_to.id if lead.assigned_to else None,
-                },
-                'created_at': lead.created_at,
-                'updated_at': lead.updated_at
+                'created_at': log.created_at
+            })
+
+        # Customer details
+        customer = lead.customer
+        customer_data = None
+        if customer:
+            customer_data = {
+                'id': customer.id,
+                'name': customer.name,
+                'company_name': customer.company_name,
+                'email': customer.email,
+                'phone': customer.phone,
+                'gst_number': customer.gst_number,
+                'website': customer.website,
+                'primary_address': customer.primary_address,
+                'billing_address': customer.billing_address,
+                'shipping_address': customer.shipping_address,
+                'title': customer.title,
+                'created_at': customer.created_at,
             }
-        })
+
+        # Assigned to and created by
+        assigned_to = lead.assigned_to
+        created_by = lead.created_by
+        assigned_to_data = None
+        if assigned_to:
+            assigned_to_data = {
+                'id': assigned_to.id,
+                'name': assigned_to.get_full_name(),
+                'email': assigned_to.email,
+                'phone': getattr(assigned_to, 'phone_number', None),
+                'role': getattr(assigned_to, 'role', None),
+            }
+
+        created_by_data = None
+        if created_by:
+            created_by_data = {
+                'id': created_by.id,
+                'name': created_by.get_full_name(),
+                'email': created_by.email,
+                'phone': getattr(created_by, 'phone_number', None),
+                'role': getattr(created_by, 'role', None),
+            }
+
+        # Quotation details (expanded) if present
+        quotation_data = None
+        if lead.quotation_id:
+            try:
+                quotation = Quotation.objects.prefetch_related('details__product', 'terms').get(pk=lead.quotation_id)
+                quotation_data = get_quotation_response_data(quotation, lead)
+            except Quotation.DoesNotExist:
+                quotation_data = None
+            except Exception:
+                logger.exception("Failed to fetch/serialize quotation for lead %s", lead.id)
+                quotation_data = None
+
+        data = {
+            'id': lead.id,
+            'status': lead.status,
+            'priority': lead.priority,
+            'source': lead.lead_source,
+            'follow_up_date': lead.follow_up_date,
+            'notes': lead.notes,
+            'customer': customer_data,
+            'assigned_to': assigned_to_data,
+            'created_by': created_by_data,
+            'quotation': quotation_data,
+            'activity_logs': logs,
+            'created_at': lead.created_at,
+            'updated_at': lead.updated_at,
+        }
+
+        return JsonResponse({'data': data})
 
     def put(self, request, lead_id):
         lead = get_object_or_404(Lead, pk=lead_id)
