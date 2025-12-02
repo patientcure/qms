@@ -190,19 +190,19 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
             'message': f"Salesperson {salesperson.get_full_name()} {action} successfully",
             'data': {'is_active': salesperson.is_active}
         })
-class LeadListView(BaseAPIView):
-    def get(self, request):
+class LeadListView(JWTAuthMixin, BaseAPIView):
+    def get(self, request, filter_path=None):
         user = request.user
-        lead_filter = request.GET.get('filter', 'active')
-
-        # Base queryset with related objects
-        leads = Lead.objects.select_related(
-            "customer", "assigned_to", "created_by"
-        )        
-        if lead_filter != 'converted':
+        lead_filter = request.GET.get("filter", None)
+        is_converted_request = (
+            filter_path == "converted" or
+            lead_filter == "converted"
+        )
+        leads = Lead.objects.select_related("customer", "assigned_to", "created_by")
+        if is_converted_request:
             leads = leads.filter(status=LeadStatus.CONVERTED)
         else:
-            leads = leads.exclude(status=LeadStatus.CONVERTED)        
+            leads = leads.exclude(status=LeadStatus.CONVERTED)
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
 
@@ -219,11 +219,13 @@ class LeadListView(BaseAPIView):
             "status": lead.status,
             "priority": lead.priority,
             "source": lead.lead_source,
+            "converted_date": lead.follow_up_date,
             "customer": {
                 "id": customer.id if customer else None,
                 "name": getattr(customer, "name", None),
                 "email": getattr(customer, "email", None),
                 "phone": getattr(customer, "phone", None),
+                "company_name": getattr(customer, "company_name", None),
             },
             "assigned_to": {
                 "id": assigned_to.id if assigned_to else None,
@@ -231,7 +233,6 @@ class LeadListView(BaseAPIView):
             },
             "created_at": lead.created_at,
         }
-
 
 class LeadCreateView(JWTAuthMixin, BaseAPIView):
     @transaction.atomic
