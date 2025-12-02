@@ -133,32 +133,32 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Media files (User-uploaded content)
 # 1. Load Firebase credentials from the environment variable
-firebase_credentials_json = os.getenv('FIREBASE_CREDENTIALS_JSON')
-firebase_credentials_dict = None
-if firebase_credentials_json:
-    try:
-        firebase_credentials_dict = json.loads(firebase_credentials_json)
-    except json.JSONDecodeError:
-        print("ERROR: Could not decode FIREBASE_CREDENTIALS_JSON.")
-else:
-    print("WARNING: FIREBASE_CREDENTIALS_JSON environment variable not found.")
+# firebase_credentials_json = os.getenv('FIREBASE_CREDENTIALS_JSON')
+# firebase_credentials_dict = None
+# if firebase_credentials_json:
+#     try:
+#         firebase_credentials_dict = json.loads(firebase_credentials_json)
+#     except json.JSONDecodeError:
+#         print("ERROR: Could not decode FIREBASE_CREDENTIALS_JSON.")
+# else:
+#     print("WARNING: FIREBASE_CREDENTIALS_JSON environment variable not found.")
 
 # 2. Initialize Firebase Admin SDK (if you use other Firebase services like Auth, Firestore, etc.)
-if firebase_credentials_dict and not firebase_admin._apps:
-    cred = credentials.Certificate(firebase_credentials_dict)
-    firebase_admin.initialize_app(cred)
-    print("Firebase Admin SDK initialized successfully.")
+# if firebase_credentials_dict and not firebase_admin._apps:
+#     cred = credentials.Certificate(firebase_credentials_dict)
+#     firebase_admin.initialize_app(cred)
+#     print("Firebase Admin SDK initialized successfully.")
 
 # 3. Configure django-storages to use Google Cloud Storage for all file uploads
-DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-GS_BUCKET_NAME = os.getenv('FIREBASE_STORAGE_BUCKET')
+# DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+# GS_BUCKET_NAME = os.getenv('FIREBASE_STORAGE_BUCKET')
 
-# 4. Explicitly set Google Cloud Storage credentials from the loaded dictionary
-if firebase_credentials_dict:
-    GS_CREDENTIALS = service_account.Credentials.from_service_account_info(firebase_credentials_dict)
+# # 4. Explicitly set Google Cloud Storage credentials from the loaded dictionary
+# if firebase_credentials_dict:
+#     GS_CREDENTIALS = service_account.Credentials.from_service_account_info(firebase_credentials_dict)
 
-# Optional: Set a default access level for uploaded files
-GS_DEFAULT_ACL = 'publicRead'
+# # Optional: Set a default access level for uploaded files
+# GS_DEFAULT_ACL = 'publicRead'
 
 
 # --- Third-Party App Settings ---

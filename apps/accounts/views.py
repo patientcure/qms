@@ -10,6 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.quotations.models import Quotation, ActivityAction, ActivityLog, QuotationStatus, Lead
 from datetime import datetime
 import json
+import traceback
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -337,6 +338,38 @@ class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
                 message=message,
                 customer=quotation.customer,
             )
+            # Cascade quotation -> lead status changes
+            try:
+                if quotation.lead_id:
+                    lead = Lead.objects.filter(pk=quotation.lead_id).first()
+                    if lead:
+                        # If quotation accepted -> mark lead converted
+                        if quotation.status == QuotationStatus.ACCEPTED and lead.status != 'CONVERTED':
+                            old_lead_status = lead.status
+                            lead.status = 'CONVERTED'
+                            lead.save(update_fields=['status'])
+                            ActivityLog.log(
+                                actor=request.user,
+                                action=ActivityAction.LEAD_STATUS_CHANGED,
+                                entity=lead,
+                                message=f"Status changed from {old_lead_status} to {lead.status} due to quotation {quotation.quotation_number}",
+                                customer=lead.customer,
+                            )
+                        # If quotation rejected -> mark lead lost
+                        if quotation.status == QuotationStatus.REJECTED and lead.status != 'LOST':
+                            old_lead_status = lead.status
+                            lead.status = 'LOST'
+                            lead.save(update_fields=['status'])
+                            ActivityLog.log(
+                                actor=request.user,
+                                action=ActivityAction.LEAD_STATUS_CHANGED,
+                                entity=lead,
+                                message=f"Status changed from {old_lead_status} to {lead.status} due to quotation {quotation.quotation_number}",
+                                customer=lead.customer,
+                            )
+            except Exception:
+                # Don't let cascading failures block the main update
+                pass
             
             return JsonResponse({
                 'success': True,
@@ -358,11 +391,6 @@ class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
                     'follow_up_date': quotation.follow_up_date.isoformat() if quotation.follow_up_date else None
                 }
             })
-
-
-# ========== Lead Status Update API ==========
-import traceback
-
 class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
     def put(self, request, lead_id):
         try:
@@ -413,6 +441,40 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                     )
                 except Exception as e:
                     return JsonResponse({'success': False, 'error': f'Activity log failed: {str(e)}'}, status=500)
+
+                # Cascade lead -> quotation status changes
+                try:
+                    # If lead converted -> mark related quotations accepted
+                    if lead.status == 'CONVERTED':
+                        related_qs = Quotation.objects.filter(lead_id=lead.id).exclude(status=QuotationStatus.ACCEPTED)
+                        for q in related_qs:
+                            old_q_status = q.status
+                            q.status = QuotationStatus.ACCEPTED
+                            q.save(update_fields=['status'])
+                            ActivityLog.log(
+                                actor=request.user,
+                                action=ActivityAction.QUOTATION_STATUS_CHANGED,
+                                entity=q,
+                                message=f"Status changed from {old_q_status} to {q.status} due to lead {lead.id} conversion",
+                                customer=q.customer,
+                            )
+                    # If lead lost -> mark related quotations rejected
+                    if lead.status == 'LOST':
+                        related_qs = Quotation.objects.filter(lead_id=lead.id).exclude(status=QuotationStatus.REJECTED)
+                        for q in related_qs:
+                            old_q_status = q.status
+                            q.status = QuotationStatus.REJECTED
+                            q.save(update_fields=['status'])
+                            ActivityLog.log(
+                                actor=request.user,
+                                action=ActivityAction.QUOTATION_STATUS_CHANGED,
+                                entity=q,
+                                message=f"Status changed from {old_q_status} to {q.status} due to lead {lead.id} lost",
+                                customer=q.customer,
+                            )
+                except Exception:
+                    # Non-fatal: continue even if cascading fails
+                    pass
 
                 return JsonResponse({
                     'success': True,

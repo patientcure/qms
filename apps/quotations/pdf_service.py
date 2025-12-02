@@ -132,7 +132,7 @@ class QuotationPDFGenerator:
             return Decimal('0')
 
     def _format_currency(self, value):
-        return f"Rs. {value:,.2f}"
+        return f"Rs.&nbsp;{value:,.2f}"
 
     def _clean_html_content(self, content):
         if not content: return ""

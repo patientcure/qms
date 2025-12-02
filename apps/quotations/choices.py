@@ -7,16 +7,16 @@ class LeadPriority(models.TextChoices):
     MEDIUM = 'MEDIUM', _('Medium')
     HIGH = 'HIGH', _('High')
 
-class LeadSource(models.TextChoices):
-    WEBSITE = 'WEBSITE', _('Website')
-    REFERRAL = 'REFERRAL', _('Referral')
-    SOCIALMEDIA = 'SOCIAL_MEDIA', _('Social Media')
-    EMAIL = 'EMAIL', _('Email Campaign')
-    COLD_CALL = 'COLD_CALL', _('Cold Call')
-    EXHIBITION = 'EXHIBITION', _('Exhibition/Trade Show')
-    EXISTING_CUSTOMER = 'EXISTING_CUSTOMER', _('Existing Customer')
-    OTHER = 'OTHER', _('Other')
-    QUOTATION = 'QUOTATION', _('Quotation')
+# class LeadSource(models.TextChoices):
+#     WEBSITE = 'WEBSITE', _('Website')
+#     REFERRAL = 'REFERRAL', _('Referral')
+#     SOCIALMEDIA = 'SOCIAL_MEDIA', _('Social Media')
+#     EMAIL = 'EMAIL', _('Email Campaign')
+#     COLD_CALL = 'COLD_CALL', _('Cold Call')
+#     EXHIBITION = 'EXHIBITION', _('Exhibition/Trade Show')
+#     EXISTING_CUSTOMER = 'EXISTING_CUSTOMER', _('Existing Customer')
+#     OTHER = 'OTHER', _('Other')
+#     QUOTATION = 'QUOTATION', _('Quotation')
 
 class LeadStatus(models.TextChoices):
     PENDING = 'PENDING', _('Pending')
@@ -31,6 +31,7 @@ class LeadStatus(models.TextChoices):
     REVISED = 'REVISED', _('Revised')
 
 class QuotationStatus(models.TextChoices):
+    LOST = 'LOST', 'Lost'
     DRAFT = 'DRAFT', 'Draft'
     PENDING = 'PENDING', 'Pending'
     SENT = 'SENT', 'Sent'

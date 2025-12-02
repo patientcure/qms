@@ -190,8 +190,7 @@ class SalespersonDetailView(AdminRequiredMixin, BaseAPIView):
             'message': f"Salesperson {salesperson.get_full_name()} {action} successfully",
             'data': {'is_active': salesperson.is_active}
         })
-#region Leads
-class LeadListView(JWTAuthMixin, BaseAPIView):
+class LeadListView(BaseAPIView):
     def get(self, request):
         user = request.user
         lead_filter = request.GET.get('filter', 'active')
@@ -199,83 +198,38 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
         # Base queryset with related objects
         leads = Lead.objects.select_related(
             "customer", "assigned_to", "created_by"
-        )
+        )        
         if lead_filter != 'converted':
             leads = leads.filter(status=LeadStatus.CONVERTED)
         else:
-            # 'active' means all leads that are NOT converted
-            leads = leads.exclude(status=LeadStatus.CONVERTED)
-        # If lead_filter is something else (e.g., 'all'), we just get all leads
-        
-        # Restrict SALESPERSON to only their own leads
+            leads = leads.exclude(status=LeadStatus.CONVERTED)        
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
 
-        # Prefetch quotations (bulk fetch only needed fields)
-        quotation_ids = leads.exclude(quotation_id__isnull=True).values_list(
-            "quotation_id", flat=True
-        )
-        quotations = Quotation.objects.filter(id__in=quotation_ids).only("id", "file_url")
-        quotation_map = {q.id: q.file_url for q in quotations}
-
-        # Fetch activity logs for all leads in bulk
-        lead_ids = leads.values_list("id", flat=True)
-        activity_logs = ActivityLog.objects.filter(
-            entity_type="Lead",
-            entity_id__in=[str(lid) for lid in lead_ids]
-        ).select_related("actor").order_by("-created_at")
-
-        # Group logs by entity_id
-        logs_by_lead = {}
-        for log in activity_logs:
-            lead_id = int(log.entity_id)
-            if lead_id not in logs_by_lead:
-                logs_by_lead[lead_id] = []
-            logs_by_lead[lead_id].append({
-                "id": log.id,
-                "action": log.action,
-                "message": log.message,
-                "actor": {
-                    "id": log.actor.id if log.actor else None,
-                    "name": log.actor.get_full_name() if log.actor else "System"
-                },
-                "created_at": log.created_at
-            })
-
-        data = [self.serialize_lead(lead, quotation_map, logs_by_lead) for lead in leads]
-
+        data = [self.serialize_lead(lead) for lead in leads]
         return JsonResponse({"data": data}, status=200, safe=False)
 
     @staticmethod
-    def serialize_lead(lead, quotation_map, logs_by_lead):
+    def serialize_lead(lead):
         customer = lead.customer
         assigned_to = lead.assigned_to
 
         return {
             "id": lead.id,
             "status": lead.status,
-            "source": lead.lead_source,
-            "follow_up_date": lead.follow_up_date,
-            "notes": lead.notes or "",
             "priority": lead.priority,
+            "source": lead.lead_source,
             "customer": {
                 "id": customer.id if customer else None,
                 "name": getattr(customer, "name", None),
-                "company_name": getattr(customer, "company_name", None),
-                "phone": getattr(customer, "phone", None),
                 "email": getattr(customer, "email", None),
-                "primary_address": getattr(customer, "primary_address", None),
+                "phone": getattr(customer, "phone", None),
             },
             "assigned_to": {
                 "id": assigned_to.id if assigned_to else None,
                 "name": assigned_to.get_full_name() if assigned_to else None,
             },
-            "quotation": lead.quotation_id,
-            "file_url": quotation_map.get(lead.quotation_id),
             "created_at": lead.created_at,
-            "updated_at": lead.updated_at,
-            "created_by": lead.created_by.get_full_name() if lead.created_by else None,
-            "activity_logs": logs_by_lead.get(lead.id, []),  # Latest 10 activities
         }
 
 
