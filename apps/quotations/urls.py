@@ -51,7 +51,8 @@ from .views import (
     CustomerSearchView,
     FilteredCustomerListView,
     UnfilteredCustomerListView,
-    UserStatsView
+    UserStatsView,
+    PopupView,
 )
 from .lead_disc.views import LeadDescriptionManageView
 
@@ -69,6 +70,7 @@ urlpatterns = [
     path('api/leads/create/', LeadCreateView.as_view(), name='lead_create'),
     path('api/leads/<int:lead_id>/', LeadDetailView.as_view(), name='lead_detail'),
     path('api/leads/<int:lead_id>/assign/', LeadAssignView.as_view(), name='lead_assign'),
+    path('api/leads/popup/', PopupView.as_view(), name='lead_popup'),
 
     # ============ Lead Description Management API ==========
     path('api/leads/<int:lead_id>/descriptions/', LeadDescriptionManageView.as_view(), name='lead_description_manage'), 

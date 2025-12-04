@@ -15,7 +15,7 @@ import json
 from apps.accounts.models import User, Roles
 from .models import (
     Quotation, Lead, Customer, Product,ProductImage,
-    TermsAndConditions, CompanyProfile, ActivityLog,Category
+    TermsAndConditions, CompanyProfile, ActivityLog,Category, LeadDescription
 )
 from .forms import (
     SalespersonForm, LeadForm,
@@ -205,12 +205,27 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
             leads = leads.exclude(status=LeadStatus.CONVERTED)
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
+        lead_ids = [str(l.id) for l in leads]
+        activity_logs = ActivityLog.objects.filter(entity_type='Lead', entity_id__in=lead_ids).select_related('actor').order_by('-created_at')
+        logs_by_lead = {}
+        for log in activity_logs:
+            logs_by_lead.setdefault(log.entity_id, []).append({
+                'id': log.id,
+                'action': log.action,
+                'actor': {
+                    'id': log.actor.id if log.actor else None,
+                    'name': log.actor.get_full_name() if log.actor else 'System',
+                    'email': log.actor.email if log.actor else None,
+                },
+                'message': log.message,
+                'created_at': log.created_at,
+            })
 
-        data = [self.serialize_lead(lead) for lead in leads]
+        data = [self.serialize_lead(lead, logs_by_lead.get(str(lead.id), [])) for lead in leads]
         return JsonResponse({"data": data}, status=200, safe=False)
 
     @staticmethod
-    def serialize_lead(lead):
+    def serialize_lead(lead, activity_logs=None):
         customer = lead.customer
         assigned_to = lead.assigned_to
 
@@ -232,6 +247,7 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
                 "name": assigned_to.get_full_name() if assigned_to else None,
             },
             "created_at": lead.created_at,
+            "activity_logs": activity_logs or [],
         }
 
 class LeadCreateView(JWTAuthMixin, BaseAPIView):
@@ -1392,3 +1408,43 @@ class TopPerfomerView(BaseAPIView):
                 exc_info=True
             )
             return JsonResponse({'error': 'An internal server error occurred.'}, status=500)
+
+class PopupView(JWTAuthMixin, BaseAPIView):
+    def get(self, request):
+        user = request.user
+        today = datetime.today().date()
+        leads_qs = Lead.objects.select_related('customer', 'assigned_to', 'created_by').filter(
+            Q(follow_up_date=today) | Q(id__in=LeadDescription.objects.filter(next_date=today).values_list('lead_id', flat=True))
+        ).distinct()
+
+        if getattr(user, 'role', None) == Roles.SALESPERSON:
+            leads_qs = leads_qs.filter(Q(assigned_to=user) | Q(created_by=user))
+
+        data = []
+        for lead in leads_qs:
+            customer = lead.customer
+            assigned_to = lead.assigned_to
+            
+            data.append({
+                'id': lead.id,
+                'status': lead.status,
+                'priority': lead.priority,
+                'source': lead.lead_source,
+                'follow_up_date': lead.follow_up_date,
+                'notes': lead.notes,
+                'customer': {
+                    'id': customer.id if customer else None,
+                    'name': getattr(customer, 'name', None),
+                    'email': getattr(customer, 'email', None),
+                    'phone': getattr(customer, 'phone', None),
+                    'company_name': getattr(customer, 'company_name', None),
+                },
+                'assigned_to': {
+                    'id': assigned_to.id if assigned_to else None,
+                    'name': assigned_to.get_full_name() if assigned_to else None,
+                },
+                'created_at': lead.created_at,
+                'updated_at': lead.updated_at,
+            })
+
+        return JsonResponse({'data': data}, status=200, safe=False)
