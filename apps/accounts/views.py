@@ -411,6 +411,12 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                 changes.append(f"Status changed from {old_status} to {status}")
                 fields_to_update.append('status')
 
+            priority = data.get("priority")
+            if priority and priority != lead.priority:
+                old_priority = lead.priority
+                lead.priority = priority
+                changes.append(f"Priority changed from {old_priority} to {priority}")
+                fields_to_update.append('priority')
             follow_up_date_str = data.get("follow_up_date")
             if follow_up_date_str:
                 try:
@@ -482,6 +488,7 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                     'data': {
                         'id': lead.id,
                         'status': lead.status,
+                        'priority': lead.priority,
                         'follow_up_date': lead.follow_up_date.isoformat() if lead.follow_up_date else None,
                         'changes': changes
                     }
@@ -493,6 +500,7 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                 'data': {
                     'id': lead.id,
                     'status': lead.status,
+                    'priority': lead.priority,
                     'follow_up_date': lead.follow_up_date.isoformat() if lead.follow_up_date else None
                 }
             })
@@ -502,7 +510,6 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                 'error': str(e),
                 'traceback': traceback.format_exc()
             }, status=500)
-
 
 class ToggleUserType(AdminRequiredMixin, BaseAPIView):
     def post(self, request, user_id):

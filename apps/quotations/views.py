@@ -205,27 +205,12 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
             leads = leads.exclude(status=LeadStatus.CONVERTED)
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
-        lead_ids = [str(l.id) for l in leads]
-        activity_logs = ActivityLog.objects.filter(entity_type='Lead', entity_id__in=lead_ids).select_related('actor').order_by('-created_at')
-        logs_by_lead = {}
-        for log in activity_logs:
-            logs_by_lead.setdefault(log.entity_id, []).append({
-                'id': log.id,
-                'action': log.action,
-                'actor': {
-                    'id': log.actor.id if log.actor else None,
-                    'name': log.actor.get_full_name() if log.actor else 'System',
-                    'email': log.actor.email if log.actor else None,
-                },
-                'message': log.message,
-                'created_at': log.created_at,
-            })
 
-        data = [self.serialize_lead(lead, logs_by_lead.get(str(lead.id), [])) for lead in leads]
+        data = [self.serialize_lead(lead) for lead in leads]
         return JsonResponse({"data": data}, status=200, safe=False)
 
     @staticmethod
-    def serialize_lead(lead, activity_logs=None):
+    def serialize_lead(lead):
         customer = lead.customer
         assigned_to = lead.assigned_to
 
@@ -247,7 +232,6 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
                 "name": assigned_to.get_full_name() if assigned_to else None,
             },
             "created_at": lead.created_at,
-            "activity_logs": activity_logs or [],
         }
 
 class LeadCreateView(JWTAuthMixin, BaseAPIView):
