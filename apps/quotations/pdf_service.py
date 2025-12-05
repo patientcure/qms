@@ -131,6 +131,10 @@ class QuotationPDFGenerator:
         except (ValueError, TypeError):
             return Decimal('0')
 
+    def _format_quantity(self, qty: Decimal):
+        if qty == qty.to_integral():
+            return str(int(qty))
+        return str(qty.normalize())
     def _format_currency(self, value):
         return f"Rs.&nbsp;{value:,.2f}"
 
@@ -251,7 +255,7 @@ class QuotationPDFGenerator:
             row = [
                 Paragraph(str(idx), self.normal_style),
                 product_cell,
-                Paragraph(str(quantity), self.normal_style),
+                Paragraph(self._format_quantity(quantity), self.normal_style),
                 Paragraph(self._format_currency(unit_price), self.right_style),
             ]
             if has_any_discount:
@@ -271,6 +275,8 @@ class QuotationPDFGenerator:
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('TOPPADDING', (0, 0), (-1, -1), 8),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('WORDWRAP', (3, 1), (-1, -1), 'CJK'),
+            ('NOSPLIT', (3, 1), (-1, -1)),
         ]))
 
         return [item_table, Spacer(1, 8*mm)], {"subtotal": subtotal, "total_item_discount": total_item_discount}
