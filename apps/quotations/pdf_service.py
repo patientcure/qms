@@ -135,7 +135,10 @@ class QuotationPDFGenerator:
         if qty == qty.to_integral():
             return str(int(qty))
         return str(qty.normalize())
+    
     def _format_currency(self, value):
+        if value % 1 == 0:
+            return f"Rs.&nbsp;{int(value):,}"
         return f"Rs.&nbsp;{value:,.2f}"
 
     def _clean_html_content(self, content):
@@ -189,10 +192,10 @@ class QuotationPDFGenerator:
 
         if has_any_discount:
             headers = ['S.No.', 'Product/Service', 'Qty', 'Rate', 'Disc (%)', 'Net Amount']
-            colWidths = [12*mm, 68*mm, 15*mm, 25*mm, 20*mm, 30*mm]
+            colWidths = [12*mm, 63*mm, 15*mm, 25*mm, 20*mm, 35*mm]
         else:
             headers = ['S.No.', 'Product/Service', 'Qty', 'Rate', 'Net Amount']
-            colWidths = [12*mm, 88*mm, 15*mm, 25*mm, 30*mm]
+            colWidths = [12*mm, 83*mm, 15*mm, 25*mm, 35*mm]
 
         table_data = [headers]
         subtotal = Decimal('0')
@@ -285,12 +288,14 @@ class QuotationPDFGenerator:
         subtotal_after_item_disc = self._to_decimal(totals.get("subtotal", 0)) - self._to_decimal(totals.get("total_item_discount", 0))
         overall_discount_value = self._to_decimal(getattr(self.quotation, 'discount', 0))
         discount_label, overall_discount_amount = 'Special Discount:', Decimal('0.00')
+        
         if overall_discount_value > 0:
             if getattr(self.quotation, 'discount_type', 'percentage') == 'amount':
                 overall_discount_amount = overall_discount_value
             else:
                 overall_discount_amount = subtotal_after_item_disc * (overall_discount_value / 100)
                 discount_label = f'Special Discount ({overall_discount_value}%):'
+        
         subtotal_after_all_discounts = subtotal_after_item_disc - overall_discount_amount
         additional_charge_amount = self._to_decimal(getattr(self.quotation, 'additional_charge_amount', 0))
         additional_charge_name = getattr(self.quotation, 'additional_charge_name', 'Additional Charges') or 'Additional Charges'
@@ -301,27 +306,36 @@ class QuotationPDFGenerator:
         tax_label = f'Tax ({tax_rate}%):' if tax_rate > 0 else 'Tax:'
 
         grand_total = subtotal_before_tax + tax_amount
+        val_style = ParagraphStyle('TotalVal', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, textColor=self.dark_gray)
+        grand_total_style = ParagraphStyle('GrandTotal', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, fontName='Helvetica-Bold', textColor=self.primary_blue)
+        label_style = ParagraphStyle('TotalLabel', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, fontName='Helvetica-Bold', textColor=self.dark_gray)
+        grand_label_style = ParagraphStyle('GrandLabel', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, fontName='Helvetica-Bold', textColor=self.primary_blue)
+        def create_row(label, value, is_grand_total=False):
+            l_style = grand_label_style if is_grand_total else label_style
+            v_style = grand_total_style if is_grand_total else val_style
+            return [Paragraph(label, l_style), Paragraph(value, v_style)]
 
         totals_data = [
-            ['Subtotal:', self._format_currency(subtotal_after_item_disc)],
+            create_row('Subtotal:', self._format_currency(subtotal_after_item_disc)),
         ]       
         if overall_discount_amount > 0:
-            totals_data.append([discount_label, f"- {self._format_currency(overall_discount_amount)}"])
+            totals_data.append(create_row(discount_label, f"- {self._format_currency(overall_discount_amount)}"))
 
         if additional_charge_amount > 0:
-            totals_data.append([f'{additional_charge_name}:', self._format_currency(additional_charge_amount)])
+            totals_data.append(create_row(f'{additional_charge_name}:', self._format_currency(additional_charge_amount)))
         
         totals_data.extend([
-            [tax_label, self._format_currency(tax_amount)],
-            ['Total Amount:', self._format_currency(grand_total)],
+            create_row(tax_label, self._format_currency(tax_amount)),
+            create_row('Total Amount:', self._format_currency(grand_total), is_grand_total=True),
         ])
-        totals_table = Table(totals_data, colWidths=[40*mm, 40*mm])
+        totals_table = Table(totals_data, colWidths=[60*mm, 40*mm]) # Increased label col width slightly to be safe
+        
         totals_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('TEXTCOLOR', (0, -1), (-1, -1), self.primary_blue),
-            ('LINEABOVE', (0, -1), (-1, -1), 1.5, colors.black),
-            ('TOPPADDING', (0, -1), (-1, -1), 8),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LINEABOVE', (0, -1), (-1, -1), 1.5, self.dark_gray),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ]))
         return [Table([[totals_table]], colWidths=[170 * mm], style=[('ALIGN', (0, 0), (0, 0), 'RIGHT')]), Spacer(1, 10*mm)]
 
