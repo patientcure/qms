@@ -213,12 +213,13 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
     def serialize_lead(lead):
         customer = lead.customer
         assigned_to = lead.assigned_to
-
+        next_date = LeadDescription.objects.filter(lead=lead).values_list('next_date', flat=True).last()
         return {
             "id": lead.id,
             "status": lead.status,
             "priority": lead.priority,
             "source": lead.lead_source,
+            "next_date":next_date,
             "converted_date": lead.follow_up_date,
             "customer": {
                 "id": customer.id if customer else None,
