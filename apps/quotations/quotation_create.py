@@ -136,7 +136,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             quotation.status = QuotationStatus.DRAFT
 
             # Step 4: Handle assignment
-            if not quotation.assigned_to and request_json.get('auto_assign', True):
+            if not quotation.assigned_to:
                 if getattr(user, 'role', None) == Roles.SALESPERSON:
                     quotation.assigned_to = user
                 else:
