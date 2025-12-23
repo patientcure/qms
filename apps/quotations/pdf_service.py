@@ -25,10 +25,11 @@ from django.contrib.staticfiles import finders
 
 
 class QuotationPDFGenerator:
-    def __init__(self, quotation, items_data, user=None, company_profile=None, terms=None):
+    def __init__(self, quotation, items_data, user=None, company_profile=None, terms=None, signature=None):
         self.quotation = quotation
         self.items_data = items_data
         self.user = user
+        self.signature = signature
         self.company = company_profile
         self.terms = terms or []
         self.styles = getSampleStyleSheet()
@@ -437,6 +438,26 @@ class QuotationPDFGenerator:
         return elements
     
     def _build_footer(self):
+        elements = [Spacer(1, 15 * mm)]
+        if self.signature:
+            try:
+                if str(self.signature).lower().startswith(('http://', 'https://')):
+                    resp = requests.get(self.signature, timeout=5)
+                    resp.raise_for_status()
+                    sig_io = io.BytesIO(resp.content)
+                    signature_image = RLImage(sig_io, width=40 * mm, height=20 * mm, kind='proportional')
+                else:
+                    if os.path.exists(self.signature):
+                        signature_image = RLImage(self.signature, width=40 * mm, height=20 * mm, kind='proportional')
+                    else:
+                        signature_image = None
+                
+                if signature_image:
+                    elements.append(signature_image)
+                    elements.append(Spacer(1, 5 * mm))
+            except Exception:
+                pass
+        
         creator_name = "Admin"
         creator_phone = ""
         user = getattr(self, 'user', None)
@@ -450,7 +471,8 @@ class QuotationPDFGenerator:
             Paragraph(footer_text, self.normal_style)
         ]], colWidths=[170 * mm])
 
-        return [Spacer(1, 15 * mm), footer_table]
+        elements.append(footer_table)
+        return elements
 
     def generate(self):
         """Generate the complete PDF"""

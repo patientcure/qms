@@ -1,12 +1,10 @@
 import os
 from django.conf import settings
 from django.core.files.base import ContentFile
-from decimal import Decimal
 import logging
 from datetime import datetime
 from .models import CompanyProfile, Product
 from .pdf_service import QuotationPDFGenerator
-from storages.backends.gcloud import GoogleCloudStorage
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +33,17 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
         company_profile = CompanyProfile.objects.first()
 
         # --- Generate PDF ---
+        signature_url = None
+        if hasattr(request.user, 'signature') and request.user.signature and request.user.signature.image:
+            signature_url = request.build_absolute_uri(request.user.signature.image.url)
+        
         generator = QuotationPDFGenerator(
             user = request.user,
             quotation=quotation,
             items_data=enriched_items,
             company_profile=company_profile,
-            terms=terms
+            terms=terms,
+            signature=signature_url
         )
         pdf_content = generator.generate()
 
