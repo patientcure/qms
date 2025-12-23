@@ -439,6 +439,8 @@ class QuotationPDFGenerator:
     
     def _build_footer(self):
         elements = [Spacer(1, 15 * mm)]
+        SIGN_W = 40 * mm
+        SIGN_H = 20 * mm
         signature_flowable = None
         if self.signature:
             try:
@@ -449,38 +451,23 @@ class QuotationPDFGenerator:
 
                     signature_flowable = RLImage(
                         img_io,
-                        width=40 * mm,
-                        height=20 * mm,
+                        width=SIGN_W,
+                        height=SIGN_H,
                         kind='proportional'
                     )
                 else:
-                    # local file path
                     if os.path.exists(self.signature):
                         signature_flowable = RLImage(
                             self.signature,
-                            width=40 * mm,
-                            height=20 * mm,
+                            width=SIGN_W,
+                            height=SIGN_H,
                             kind='proportional'
                         )
             except Exception:
                 signature_flowable = None
-        if signature_flowable:
-            signature_table = Table(
-                [[signature_flowable]],
-                colWidths=[40 * mm],
-                style=[
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ]
-            )
-
-            elements.append(signature_table)
-            elements.append(Spacer(1, 5 * mm))
         creator_name = "Admin"
         creator_phone = ""
+
         user = getattr(self, 'user', None)
         if user and user.is_authenticated:
             creator_name = user.get_full_name() or user.username or "Admin"
@@ -494,10 +481,26 @@ class QuotationPDFGenerator:
 
         if creator_phone:
             footer_text += f"<br/>{creator_phone}"
+        table_rows = []
+        if signature_flowable:
+            table_rows.append([signature_flowable])
 
+        table_rows.append([Paragraph(footer_text, self.normal_style)])
         footer_table = Table(
-            [[Paragraph(footer_text, self.normal_style)]],
-            colWidths=[170 * mm]
+            table_rows,
+            colWidths=[170 * mm],
+            rowHeights=[
+                SIGN_H if signature_flowable else None,
+                None
+            ],
+            style=[
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]
         )
 
         elements.append(footer_table)
