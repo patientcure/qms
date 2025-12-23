@@ -18,7 +18,7 @@ from reportlab.platypus import (
     ListFlowable, ListItem, Frame, PageTemplate, NextPageTemplate
 )
 from reportlab.lib.units import mm
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.utils import ImageReader
 from .models import TermsAndConditions as Term
 from django.contrib.staticfiles import finders
@@ -161,7 +161,7 @@ class QuotationPDFGenerator:
         elements = [
             Paragraph("QUOTATION", self.title_style),
             Paragraph(f"Date: {datetime.now().strftime('%d-%m-%Y')}", self.right_style),
-            Paragraph(f"{self.quotation.quotation_number}", self.right_style),
+            Paragraph(f"Ref No.: {self.quotation.quotation_number}", self.right_style),
             Spacer(1, 8 * mm),
             Paragraph("To:", self.normal_style),
             Spacer(1, 2 * mm),
@@ -439,37 +439,66 @@ class QuotationPDFGenerator:
     
     def _build_footer(self):
         elements = [Spacer(1, 15 * mm)]
+        signature_flowable = None
         if self.signature:
             try:
                 if str(self.signature).lower().startswith(('http://', 'https://')):
                     resp = requests.get(self.signature, timeout=5)
                     resp.raise_for_status()
-                    sig_io = io.BytesIO(resp.content)
-                    signature_image = RLImage(sig_io, width=40 * mm, height=20 * mm, kind='proportional')
+                    img_io = io.BytesIO(resp.content)
+
+                    signature_flowable = RLImage(
+                        img_io,
+                        width=40 * mm,
+                        height=20 * mm,
+                        kind='proportional'
+                    )
                 else:
+                    # local file path
                     if os.path.exists(self.signature):
-                        signature_image = RLImage(self.signature, width=40 * mm, height=20 * mm, kind='proportional')
-                    else:
-                        signature_image = None
-                
-                if signature_image:
-                    elements.append(signature_image)
-                    elements.append(Spacer(1, 5 * mm))
+                        signature_flowable = RLImage(
+                            self.signature,
+                            width=40 * mm,
+                            height=20 * mm,
+                            kind='proportional'
+                        )
             except Exception:
-                pass
-        
+                signature_flowable = None
+        if signature_flowable:
+            signature_table = Table(
+                [[signature_flowable]],
+                colWidths=[40 * mm],
+                style=[
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ]
+            )
+
+            elements.append(signature_table)
+            elements.append(Spacer(1, 5 * mm))
         creator_name = "Admin"
         creator_phone = ""
         user = getattr(self, 'user', None)
         if user and user.is_authenticated:
             creator_name = user.get_full_name() or user.username or "Admin"
             creator_phone = getattr(user, 'phone_number', "")
-        footer_text = f"Thank you for your business!<br/><br/>Created By<br/>{creator_name}"
+
+        footer_text = (
+            "Thank you for your business!<br/><br/>"
+            "For N.K. Prosales Pvt. Ltd.<br/>"
+            f"{creator_name}"
+        )
+
         if creator_phone:
             footer_text += f"<br/>{creator_phone}"
-        footer_table = Table([[
-            Paragraph(footer_text, self.normal_style)
-        ]], colWidths=[170 * mm])
+
+        footer_table = Table(
+            [[Paragraph(footer_text, self.normal_style)]],
+            colWidths=[170 * mm]
+        )
 
         elements.append(footer_table)
         return elements
