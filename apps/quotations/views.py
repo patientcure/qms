@@ -206,6 +206,7 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
 
+        leads = leads.order_by("-created_at")
         data = [self.serialize_lead(lead) for lead in leads]
         return JsonResponse({"data": data}, status=200, safe=False)
 
