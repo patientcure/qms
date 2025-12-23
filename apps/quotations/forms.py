@@ -1,11 +1,10 @@
 from django import forms
-from .models import Customer, Product, Quotation, TermsAndConditions, EmailTemplate, ProductDetails,ProductImage
+from .models import Customer, Product, Quotation, TermsAndConditions, EmailTemplate, ProductDetails,ProductImage,SignatureImage
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from .models import Lead, Customer
 from apps.accounts.models import User,Roles
 from django import forms
-from .models import ProductDetails
 
 
 class CustomerForm(forms.ModelForm):
@@ -183,3 +182,8 @@ class ProductImageForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['quotation'].required = False
+
+class SignatureImageForm(forms.ModelForm):
+    class Meta:
+        model = SignatureImage
+        fields = ['user', 'image']
