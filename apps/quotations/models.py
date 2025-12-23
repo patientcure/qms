@@ -313,7 +313,7 @@ class ProductImage(TimestampedModel):
         return f"Image for {self.product.name}"
     
 class SignatureImage(TimestampedModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='signatures')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='signature')
     image = models.ImageField(upload_to='signatures/')
 
     def __str__(self):

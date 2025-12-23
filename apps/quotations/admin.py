@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CompanyProfile, Customer, Product, TermsAndConditions, EmailTemplate, Lead, Quotation, EmailLog, ActivityLog,Category,LeadDescription
+from .models import CompanyProfile, Customer, Product, TermsAndConditions, EmailTemplate, Lead, Quotation, EmailLog, ActivityLog,Category,LeadDescription,SignatureImage,ProductImage
 
 @admin.register(CompanyProfile)
 class CompanyProfileAdmin(admin.ModelAdmin):
@@ -57,3 +57,13 @@ class CategoryAdmin(admin.ModelAdmin):
 class LeadDescriptionAdmin(admin.ModelAdmin):
     list_display = ('lead', 'description', 'next_date', 'created_at')
     search_fields = ('lead__id', 'description')
+
+@admin.register(SignatureImage)
+class SignatureImageAdmin(admin.ModelAdmin):
+    list_display = ('user', 'image', 'created_at')
+    search_fields = ('user__username', 'user__email')
+
+@admin.register(ProductImage)
+class ProductImageAdmin(admin.ModelAdmin):
+    list_display = ('product', 'quotation', 'image', 'created_at')
+    search_fields = ('product__name', 'quotation__quotation_number')
