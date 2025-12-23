@@ -187,3 +187,6 @@ class SignatureImageForm(forms.ModelForm):
     class Meta:
         model = SignatureImage
         fields = ['user', 'image']
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['user'].required = False
