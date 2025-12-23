@@ -6,15 +6,19 @@ from django.http import JsonResponse
 
 class SignatureManageView(JWTAuthMixin, View):
     def post(self, request):
-        form = SignatureImageForm(request.POST, request.FILES)
+        try:
+            if 'image' not in request.FILES:
+                return JsonResponse({
+                    'success': False, 
+                    'message': 'No image file was found in the request.'
+                }, status=400)
 
-        if form.is_valid():
-            signature_image = form.save(commit=False)
-            signature_image.user = request.user
-            signature_image.save()
-            
+            image_file = request.FILES['image']
+            signature_image = SignatureImage.objects.create(
+                user=request.user,
+                image=image_file
+            )
             image_url = request.build_absolute_uri(signature_image.image.url)
-
             return JsonResponse({
                 'success': True,
                 'message': 'Signature uploaded successfully',
@@ -22,11 +26,17 @@ class SignatureManageView(JWTAuthMixin, View):
                     'id': signature_image.id,
                     'user_id': signature_image.user.id,
                     'image_url': image_url,
-                    'uploaded_at': signature_image.created_at
+                    'uploaded_at': signature_image.created_at.isoformat() 
                 }
             }, status=201)
-        else:
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)   
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': 'A server error occurred during the upload process.',
+                'error_type': e.__class__.__name__,
+                'error_detail': str(e)
+            }, status=500)
+        
     def get(self, request):
         user = request.user
         try:
