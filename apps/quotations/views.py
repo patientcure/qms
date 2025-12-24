@@ -1321,18 +1321,11 @@ class TopPerfomerView(BaseAPIView):
             # --- 1. Handle Query Parameters using request.GET ---
             start_date_str = request.GET.get('start_date')
             end_date_str = request.GET.get('end_date')
-            limit = request.GET.get('limit', 10)
 
             logger.info(
                 f"TopPerformerView request received with params: start_date='{start_date_str}', "
-                f"end_date='{end_date_str}', limit='{limit}'"
+                f"end_date='{end_date_str}'"
             )
-
-            try:
-                limit = int(limit)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid limit parameter '{limit}'. Falling back to default of 10.")
-                limit = 10
 
             # --- 2. Build Date Filter for Quotations ---
             quotation_filters = Q()
