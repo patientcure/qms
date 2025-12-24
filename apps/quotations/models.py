@@ -114,7 +114,7 @@ class Lead(TimestampedModel):
     assigned_to = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
     )
-    status = models.CharField(max_length=20, choices=LeadStatus.choices, default=LeadStatus.PENDING)
+    status = models.CharField(max_length=20, choices=LeadStatus.choices, default=LeadStatus.PROSPECTIVE)
     lead_source = models.CharField(max_length=20, choices=LeadSource.choices, null=True, blank=True)
     priority = models.CharField(max_length=20, choices=LeadPriority.choices, default=LeadPriority.MEDIUM)
     follow_up_date = models.DateField(null=True, blank=True)

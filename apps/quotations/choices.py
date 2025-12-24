@@ -29,6 +29,7 @@ class LeadStatus(models.TextChoices):
     PROPOSAL = 'PROPOSAL', _('Proposal Sent')
     PRIORITY = 'PRIORITY', _('Priority')
     REVISED = 'REVISED', _('Revised')
+    PROSPECTIVE = 'PROSPECTIVE', _('Prospective')
 
 class QuotationStatus(models.TextChoices):
     LOST = 'LOST', 'Lost'
