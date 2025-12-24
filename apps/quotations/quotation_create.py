@@ -11,7 +11,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from .views import BaseAPIView, JWTAuthMixin
 from .models import Product, TermsAndConditions, ActivityLog, Quotation, Customer, Lead, ProductDetails
 from .forms import QuotationForm, CustomerForm
-from .choices import ActivityAction, LeadStatus, QuotationStatus
+from .choices import ActivityAction, LeadStatus, QuotationStatus,LeadSource
 from .save_quotation import save_quotation_pdf
 from .email_service import send_quotation_email
 from apps.accounts.models import User, Roles
@@ -152,9 +152,10 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             if send_immediately:
                 quotation.status = QuotationStatus.PENDING # Initial "sent" status
                 lead = Lead.objects.create(
+                    lead_source = LeadSource.QUOTATION,
                     customer=customer, 
                     assigned_to=quotation.assigned_to, 
-                    status=LeadStatus.PENDING, 
+                    status=LeadStatus.QUALIFIED, 
                     created_by=user, 
                     quotation_id=quotation.id,
                     follow_up_date=quotation.follow_up_date
@@ -220,9 +221,10 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                 quotation.status = QuotationStatus.PENDING
                 if not lead:
                     lead = Lead.objects.create(
+                        lead_source = LeadSource.QUOTATION,
                         customer=customer, 
                         assigned_to=quotation.assigned_to, 
-                        status=LeadStatus.PENDING, 
+                        status=LeadStatus.QUALIFIED, 
                         created_by=user, 
                         quotation_id=quotation.id,
                         follow_up_date=quotation.follow_up_date
