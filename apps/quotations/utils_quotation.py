@@ -143,7 +143,7 @@ def get_quotation_response_data(quotation, lead, term_ids=None):
             
             items.append({
                 'id': detail.id,
-                'product': {'id': product.id, 'name': product.name},
+                'product': {'id': product.id, 'name': product.name, 'image_url': product.image.url if product.image else None},
                 'description': product.name,
                 'quantity': float(quantity),
                 'unit_price': float(unit_price),
