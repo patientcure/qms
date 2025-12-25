@@ -442,7 +442,7 @@ class QuotationPDFGenerator:
         SIGN_W = 40 * mm
         SIGN_H = 20 * mm
         signature_flowable = None
-        if self.signature:
+        if self.signature is not None and self.signature:
             try:
                 if str(self.signature).lower().startswith(('http://', 'https://')):
                     resp = requests.get(self.signature, timeout=5)

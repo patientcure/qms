@@ -1359,7 +1359,7 @@ class TopPerfomerView(BaseAPIView):
             
             logger.debug(f"Top Performers Query SQL: {top_performers.query}")
 
-            top_performers = top_performers[:limit]
+            top_performers = top_performers
 
             result = [
                 {
