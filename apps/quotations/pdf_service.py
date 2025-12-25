@@ -442,65 +442,65 @@ class QuotationPDFGenerator:
         SIGN_W = 40 * mm
         SIGN_H = 20 * mm
         signature_flowable = None
-        if self.signature is not None and self.signature:
+        signature = self.signature
+
+        if signature and str(signature).strip().lower() not in ("none", ""):
             try:
-                if str(self.signature).lower().startswith(('http://', 'https://')):
-                    resp = requests.get(self.signature, timeout=5)
+                if str(signature).lower().startswith(("http://", "https://")):
+                    resp = requests.get(signature, timeout=5)
                     resp.raise_for_status()
                     img_io = io.BytesIO(resp.content)
-
                     signature_flowable = RLImage(
                         img_io,
                         width=SIGN_W,
                         height=SIGN_H,
-                        kind='proportional'
+                        kind="proportional"
                     )
                 else:
-                    if os.path.exists(self.signature):
+                    if os.path.exists(signature):
                         signature_flowable = RLImage(
-                            self.signature,
+                            signature,
                             width=SIGN_W,
                             height=SIGN_H,
-                            kind='proportional'
+                            kind="proportional"
                         )
             except Exception:
                 signature_flowable = None
         creator_name = "Admin"
         creator_phone = ""
 
-        user = getattr(self, 'user', None)
+        user = getattr(self, "user", None)
         if user and user.is_authenticated:
             creator_name = user.get_full_name() or user.username or "Admin"
-            creator_phone = getattr(user, 'phone_number', "")
+            creator_phone = getattr(user, "phone_number", "")
 
         footer_text = (
             "Thank you for your business!<br/><br/>"
             "For N.K. Prosales Pvt. Ltd.<br/>"
-            f"{creator_name}"
+            f"<b>{creator_name}</b>"
         )
 
         if creator_phone:
             footer_text += f"<br/>{creator_phone}"
-        table_rows = []
+
+        # --------- Build rows dynamically ----------
+        rows = []
+
         if signature_flowable:
-            table_rows.append([signature_flowable])
+            rows.append([signature_flowable])  # signature comes first
 
-        table_rows.append([Paragraph(footer_text, self.normal_style)])
+        rows.append([Paragraph(footer_text, self.normal_style)])
+
         footer_table = Table(
-            table_rows,
+            rows,
             colWidths=[170 * mm],
-            rowHeights=[
-                SIGN_H if signature_flowable else None,
-                None
-            ],
             style=[
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ]
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ],
         )
 
         elements.append(footer_table)
