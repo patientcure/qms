@@ -235,7 +235,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                 # Any update to an already-sent quotation marks it as REVISED.
                 quotation.status = QuotationStatus.REVISED
                 if lead:
-                    lead.status = LeadStatus.REVISED
+                    lead.status = LeadStatus.NEGOTIATION
                     lead.save(update_fields=['status'])
 
             # Step 4: Process items, totals, PDF, and email

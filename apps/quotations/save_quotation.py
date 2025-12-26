@@ -1,6 +1,5 @@
 import os
 from django.conf import settings
-from django.core.files.base import ContentFile
 import logging
 from datetime import datetime
 from .models import CompanyProfile, Product
@@ -17,7 +16,6 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
         for item in items_data:
             product = products.get(int(item.get('product')))
             if not product:
-                logger.warning(f"Product ID {item.get('product')} not found for quotation {quotation.id}")
                 continue
 
             unit_price = item.get('unit_price') or product.selling_price
@@ -27,42 +25,38 @@ def save_quotation_pdf(quotation, request, items_data, terms=None):
                 'unit_price': str(unit_price),
                 'description': item.get('description', product.name),
                 'discount': item.get('discount', 0),
-                'image_url': request.build_absolute_uri(product.image.url) if product.image else None
+                # FIX: Use the local file system path instead of a URL
+                'image_path': product.image.path if product.image else None
             })
 
         company_profile = CompanyProfile.objects.first()
 
-        # --- Generate PDF ---
-        signature_url = None
+        # FIX: Use local path for signature
+        signature_path = None
         if hasattr(request.user, 'signature') and request.user.signature and request.user.signature.image:
-            signature_url = request.build_absolute_uri(request.user.signature.image.url)
+            signature_path = request.user.signature.image.path
         
         generator = QuotationPDFGenerator(
-            user = request.user,
+            user=request.user,
             quotation=quotation,
             items_data=enriched_items,
             company_profile=company_profile,
             terms=terms,
-            signature=signature_url
+            signature=signature_path
         )
         pdf_content = generator.generate()
 
-        # --- File path ---
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         file_name = f'quotation_{quotation.quotation_number}_{timestamp}.pdf'
         file_path = os.path.join(settings.MEDIA_ROOT, 'quotations', file_name)
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-        # --- Save PDF locally ---
         with open(file_path, 'wb') as f:
             f.write(pdf_content)
 
         pdf_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, 'quotations', file_name))
-
-
-        logger.info(f"PDF saved locally for quotation {quotation.id}. URL: {pdf_url}")
         return file_path, pdf_url
 
     except Exception as e:
-        logger.error(f"Error generating PDF for quotation {quotation.id}: {e}", exc_info=True)
+        logger.error(f"Error generating PDF: {e}", exc_info=True)
         raise

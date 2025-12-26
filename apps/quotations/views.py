@@ -460,6 +460,14 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
             lead.assigned_to = salesperson
             message = f"Lead assigned to {salesperson.get_full_name()}"
 
+            if lead.quotation_id:
+                try:
+                    quotation = Quotation.objects.get(pk=lead.quotation_id)
+                    quotation.assigned_to = salesperson
+                    quotation.save()
+                except Quotation.DoesNotExist:
+                    pass
+
         lead.save()
         return JsonResponse({
             'success': True, 
@@ -656,6 +664,12 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
             salesperson = get_object_or_404(User, pk=assigned_to_id, role__in=[Roles.SALESPERSON, Roles.ADMIN])
             quotation.assigned_to = salesperson
             message = f"Quotation assigned to {salesperson.get_full_name()}"
+            
+            if quotation.lead_id:
+                lead = Lead.objects.filter(pk=quotation.lead_id).first()
+                if lead:
+                    lead.assigned_to = salesperson
+                    lead.save()
         # else:
         #     quotation.assigned_to = None
         #     message = "Quotation assignment removed"

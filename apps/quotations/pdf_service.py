@@ -221,21 +221,20 @@ class QuotationPDFGenerator:
             product_cell = Paragraph(description, self.normal_style)
 
             image_flowable = None
-            image_url = item.get('image_url') or item.get('image_path')  # accept either key
-            if image_url:
+            image_source = item.get('image_path') or item.get('image_url')           
+            if image_source:
                 try:
-                    if str(image_url).lower().startswith(('http://', 'https://')):
-                        resp = requests.get(image_url, timeout=5)
+                    # Direct Disk Read (Milliseconds)
+                    if os.path.exists(str(image_source)):
+                        image_flowable = RLImage(image_source, width=max_img_w, height=max_img_h, kind='proportional')
+                    # Fallback Network Request (Limited to 1 second)
+                    elif str(image_source).startswith(('http://', 'https://')):
+                        resp = requests.get(image_source, timeout=1)
                         resp.raise_for_status()
                         img_io = io.BytesIO(resp.content)
                         image_flowable = RLImage(img_io, width=max_img_w, height=max_img_h, kind='proportional')
-                    else:
-                        # treat as local file path
-                        if os.path.exists(image_url):
-                            image_flowable = RLImage(image_url, width=max_img_w, height=max_img_h, kind='proportional')
                 except Exception:
-                    # silently ignore image errors and fall back to text only
-                    image_flowable = None
+                    image_flowable = None # Fail gracefully without hanging
 
             if image_flowable:
                 # Create a small two-column table: [image | description]
@@ -446,24 +445,13 @@ class QuotationPDFGenerator:
 
         if signature and str(signature).strip().lower() not in ("none", ""):
             try:
-                if str(signature).lower().startswith(("http://", "https://")):
-                    resp = requests.get(signature, timeout=5)
+                if os.path.exists(str(signature)):
+                    signature_flowable = RLImage(signature, width=SIGN_W, height=SIGN_H, kind="proportional")
+                elif str(signature).startswith(("http://", "https://")):
+                    resp = requests.get(signature, timeout=1)
                     resp.raise_for_status()
                     img_io = io.BytesIO(resp.content)
-                    signature_flowable = RLImage(
-                        img_io,
-                        width=SIGN_W,
-                        height=SIGN_H,
-                        kind="proportional"
-                    )
-                else:
-                    if os.path.exists(signature):
-                        signature_flowable = RLImage(
-                            signature,
-                            width=SIGN_W,
-                            height=SIGN_H,
-                            kind="proportional"
-                        )
+                    signature_flowable = RLImage(img_io, width=SIGN_W, height=SIGN_H, kind="proportional")
             except Exception:
                 signature_flowable = None
         creator_name = "Admin"
