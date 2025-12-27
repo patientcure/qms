@@ -461,23 +461,19 @@ class QuotationPDFGenerator:
         if user and user.is_authenticated:
             creator_name = user.get_full_name() or user.username or "Admin"
             creator_phone = getattr(user, "phone_number", "")
-
-        footer_text = (
-            "Thank you for your business!<br/><br/>"
+        thank_you_text = "Thank you for your business!"
+        creator_text = (
             "For N.K. Prosales Pvt. Ltd.<br/>"
             f"<b>{creator_name}</b>"
         )
 
         if creator_phone:
-            footer_text += f"<br/>{creator_phone}"
-
-        # --------- Build rows dynamically ----------
+            creator_text += f"<br/>{creator_phone}"
         rows = []
-
+        rows.append([Paragraph(thank_you_text, self.normal_style)])
         if signature_flowable:
-            rows.append([signature_flowable])  # signature comes first
-
-        rows.append([Paragraph(footer_text, self.normal_style)])
+            rows.append([signature_flowable])
+        rows.append([Paragraph(creator_text, self.normal_style)])
 
         footer_table = Table(
             rows,
