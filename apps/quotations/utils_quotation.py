@@ -141,9 +141,15 @@ def get_quotation_response_data(quotation, lead, term_ids=None):
             discount_amount = gross_total * (discount_percent / 100)
             net_total = gross_total - discount_amount
             
+            image_url = None
+            if product.image:
+                try:
+                    image_url = product.image.url
+                except Exception:
+                    image_url = None
             items.append({
                 'id': detail.id,
-                'product': {'id': product.id, 'name': product.name, 'image_url': product.image.url if product.image else None},
+                'product': {'id': product.id, 'name': product.name, 'image_url': image_url},
                 'description': product.name,
                 'quantity': float(quantity),
                 'unit_price': float(unit_price),

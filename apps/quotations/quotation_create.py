@@ -218,7 +218,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
             if original_status == QuotationStatus.DRAFT and send_immediately:
                 # First time sending a DRAFT quotation. Create lead and update status.
-                quotation.status = QuotationStatus.PENDING
+                quotation.status = QuotationStatus.REVISED
                 if not lead:
                     lead = Lead.objects.create(
                         lead_source = LeadSource.QUOTATION,
