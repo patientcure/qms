@@ -3,6 +3,7 @@
 from decimal import Decimal
 import logging
 from django.http import JsonResponse
+from httpcore import request
 from .models import Product, ProductDetails, TermsAndConditions, ActivityLog,Customer
 from .choices import ActivityAction
 from .forms import CustomerForm
@@ -144,12 +145,17 @@ def get_quotation_response_data(quotation, lead, term_ids=None):
             image_url = None
             if product.image:
                 try:
-                    image_url = product.image.url
+                    image_url = request.build_absolute_uri(product.image.url)
                 except Exception:
                     image_url = None
+
             items.append({
                 'id': detail.id,
-                'product': {'id': product.id, 'name': product.name, 'image_url': image_url},
+                'product': {
+                    'id': product.id, 
+                    'name': product.name, 
+                    'image_url': image_url
+                },
                 'description': product.name,
                 'quantity': float(quantity),
                 'unit_price': float(unit_price),
