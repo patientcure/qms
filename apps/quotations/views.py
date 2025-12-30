@@ -410,7 +410,7 @@ class LeadDetailView(BaseAPIView):
         if lead.quotation_id:
             try:
                 quotation = Quotation.objects.prefetch_related('details__product', 'terms').get(pk=lead.quotation_id)
-                quotation_data = get_quotation_response_data(quotation, lead)
+                quotation_data = get_quotation_response_data(quotation,request ,lead)
             except Quotation.DoesNotExist:
                 quotation_data = None
             except Exception:
@@ -620,7 +620,7 @@ class QuotationDetailView(BaseAPIView):
             
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
             
-            response_data = get_quotation_response_data(quotation, lead)
+            response_data = get_quotation_response_data(quotation,request ,lead)
             
             return JsonResponse({
                 'success': True,

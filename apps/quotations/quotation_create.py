@@ -173,7 +173,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             return JsonResponse({
                 'success': True, 
                 'message': f"Quotation {quotation.quotation_number} created successfully", 
-                'data': get_quotation_response_data(quotation, lead)
+                'data': get_quotation_response_data(quotation,request ,lead)
             }, status=201)
 
         except Exception as e:
@@ -248,7 +248,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             return JsonResponse({
                 "success": True,
                 "message": f"Quotation {quotation.quotation_number} updated successfully",
-                "data": get_quotation_response_data(quotation, lead)
+                "data": get_quotation_response_data(quotation,request ,lead)
             }, status=200)
 
         except Quotation.DoesNotExist:
