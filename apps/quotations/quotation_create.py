@@ -213,7 +213,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
 
             quotation = form.save(commit=False)
             quotation.customer = customer
-            
+            quotation.status = QuotationStatus.REVISED
             # Step 3: Handle status updates and lead creation logic
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
             if original_status == QuotationStatus.DRAFT and send_immediately:
