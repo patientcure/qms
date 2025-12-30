@@ -89,9 +89,9 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
         # 4. Log Activity
         log_quotation_changes(quotation, action, user)
 
-        # quotation.save(update_fields=['subtotal', 'total', 'file_url', 'has_pdf', 'status'])
+        quotation.save(update_fields=['subtotal', 'total', 'file_url', 'has_pdf', 'status'])
         if send_immediately:
-            # quotation.refresh_from_db() 
+            quotation.refresh_from_db() 
             try:
                 send_quotation_email(quotation)
                 ActivityLog.log(
