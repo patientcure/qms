@@ -129,7 +129,7 @@ def handle_validation_errors(form):
     errors = {'form': form.errors}
     return JsonResponse({'success': False, 'errors': errors}, status=400)
 
-def get_quotation_response_data(quotation, lead,request,term_ids=None):
+def get_quotation_response_data(quotation,request,lead,term_ids=None):
     try:
         items = []
         for detail in quotation.details.select_related('product').all():
