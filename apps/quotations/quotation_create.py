@@ -224,14 +224,14 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                         lead_source = LeadSource.QUOTATION,
                         customer=customer, 
                         assigned_to=quotation.assigned_to, 
-                        status=LeadStatus.QUALIFIED, 
+                        status=LeadStatus.NEGOTIATION, 
                         created_by=user, 
                         quotation_id=quotation.id,
                         follow_up_date=quotation.follow_up_date
                     )
                     quotation.lead_id = lead.id
                     quotation.save(update_fields=["lead_id", "status"])  # Ensure lead_id is saved immediately
-            elif original_status != QuotationStatus.DRAFT:
+            else:
                 # Any update to an already-sent quotation marks it as REVISED.
                 quotation.status = QuotationStatus.REVISED
                 if lead:
