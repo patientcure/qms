@@ -138,7 +138,6 @@ class Lead(TimestampedModel):
                 self.created_by = user
         if not self.lead_number:
             self.lead_number = create_next_lead_number()
-            super().save(update_fields=['lead_number']) 
         super().save(*args, **kwargs)
     @staticmethod
     def get_least_loaded_salesperson():
