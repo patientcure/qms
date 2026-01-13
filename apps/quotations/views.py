@@ -98,7 +98,7 @@ class BaseAPIView(View):
 # ========== Salesperson Management ==========
 class SalespersonListView(AdminRequiredMixin, BaseAPIView):
     def get(self, request):
-        salespeople = User.objects.filter(role=Roles.SALESPERSON)
+        salespeople = User.objects.filter(role=Roles.SALESPERSON).order_by('-date_joined')
         data = []
         for person in salespeople:
             data.append({
@@ -508,6 +508,7 @@ class QuotationListView(JWTAuthMixin, BaseAPIView):
                 quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
             else:
                 logger.info(f"User '{user.username}' is not a salesperson (or is admin). Showing all quotations.")
+            quotations = quotations.order_by('-created_at')
 
             quotation_ids = quotations.values_list("id", flat=True)
             
@@ -722,7 +723,7 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
 
         customers = Customer.objects.prefetch_related(
             Prefetch('leads', queryset=leads_qs, to_attr='filtered_leads')
-        )
+        ).order_by('-created_at')
 
         data = []
         for customer in customers:
@@ -1143,7 +1144,7 @@ class ProductSearchView(JWTAuthMixin, BaseAPIView):
         name = request.GET.get('name', '').strip()
         if not name:
             return JsonResponse({'error': 'Missing "name" parameter'}, status=400)
-        products = Product.objects.filter(Q(name__icontains=name))
+        products = Product.objects.filter(Q(name__icontains=name)).order_by('-created_at')
         data = []
         for product in products:
             data.append({
@@ -1166,7 +1167,7 @@ class CustomerSearchView(BaseAPIView):
         name = request.GET.get('name', '').strip()
         if not name:
             return JsonResponse({'error': 'Missing "name" parameter'}, status=400)
-        customers = Customer.objects.filter(Q(name__icontains=name))
+        customers = Customer.objects.filter(Q(name__icontains=name)).order_by('-created_at')
         data = []
         for customer in customers:
             data.append({
@@ -1178,10 +1179,18 @@ class CustomerSearchView(BaseAPIView):
                 'address': customer.primary_address
             })
         return JsonResponse({'data': data})
+
+
+class CompanyListView(BaseAPIView):
+    def get(self, request):
+        companies_qs = Customer.objects.exclude(company_name__isnull=True).exclude(company_name__exact='')
+        companies = companies_qs.values_list('company_name', flat=True).distinct().order_by('company_name')
+        return JsonResponse({'data': list(companies)})
+
 #region Product Management
 class ProductListView(BaseAPIView):
     def get(self, request):
-        products = Product.objects.all().prefetch_related('images')        
+        products = Product.objects.all().prefetch_related('images').order_by('-created_at')        
         data = []
         for product in products:
             image_url = []
@@ -1425,6 +1434,7 @@ class PopupView(JWTAuthMixin, BaseAPIView):
         if getattr(user, 'role', None) == Roles.SALESPERSON:
             leads_qs = leads_qs.filter(Q(assigned_to=user) | Q(created_by=user))
 
+        leads_qs = leads_qs.order_by('-created_at')
         data = []
         for lead in leads_qs:
             customer = lead.customer

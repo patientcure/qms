@@ -53,6 +53,7 @@ from .views import (
     UnfilteredCustomerListView,
     UserStatsView,
     PopupView,
+    CompanyListView,
 )
 from .lead_disc.views import LeadDescriptionManageView
 
@@ -106,6 +107,7 @@ urlpatterns = [
     path('api/customers/search/', CustomerSearchView.as_view(), name='customer_search'),
     path('api/customers/filtered/', FilteredCustomerListView.as_view(), name='customer_filtered_list'),
     path('api/customers/unfiltered/', UnfilteredCustomerListView.as_view(), name='customer_unfiltered_list'),
+    path('api/companies/', CompanyListView.as_view(), name='company_list'),
     # ========== Dashboard Stats API ==========
     path('api/dashboard/admin/stats/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
     path('api/dashboard/salesperson/stats/', SalespersonDashboardStatsView.as_view(), name='salesperson_dashboard_stats'),
