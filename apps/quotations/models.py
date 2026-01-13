@@ -110,7 +110,7 @@ class EmailTemplate(TimestampedModel):
         return self.title
 
 class Lead(TimestampedModel):
-    lead_number = models.CharField(max_length=30, unique=True, null=True, blank=True, editable=False)
+    lead_number = models.CharField(max_length=30, unique=True,editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="leads")
     assigned_to = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
