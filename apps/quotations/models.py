@@ -4,7 +4,7 @@ from django.db import models, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from .choices import LeadStatus, QuotationStatus, ActivityAction,CATEGORY_CHOICES,UNIT_CHOICES,LeadPriority,LeadSource
-from apps.quotations.utils import generate_next_quotation_number
+from apps.quotations.utils import generate_next_quotation_number,create_next_lead_number
 User = settings.AUTH_USER_MODEL
 from crum import get_current_user
 from apps.accounts.models import User,Roles
@@ -110,6 +110,7 @@ class EmailTemplate(TimestampedModel):
         return self.title
 
 class Lead(TimestampedModel):
+    lead_number = models.CharField(max_length=30, unique=True, null=True, blank=True, editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="leads")
     assigned_to = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
@@ -135,8 +136,10 @@ class Lead(TimestampedModel):
             user = get_current_user()
             if user and not user.is_anonymous:
                 self.created_by = user
+        if not self.lead_number:
+            self.lead_number = create_next_lead_number()
+            super().save(update_fields=['lead_number']) 
         super().save(*args, **kwargs)
-    
     @staticmethod
     def get_least_loaded_salesperson():
         return (

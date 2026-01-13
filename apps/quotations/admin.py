@@ -33,7 +33,7 @@ class QuotationAdmin(admin.ModelAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ('id', 'customer', 'assigned_to', 'status', 'follow_up_date', 'created_at')
+    list_display = ('id','lead_number' ,'customer', 'assigned_to', 'status', 'follow_up_date', 'created_at')
     list_filter = ('status', 'assigned_to')
 
 @admin.register(EmailLog)

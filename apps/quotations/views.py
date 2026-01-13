@@ -230,6 +230,7 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
         
         return {
             "id": lead.id,
+            "lead_number": lead.lead_number,
             "status": lead.status,
             "priority": lead.priority,
             "source": lead.lead_source,
@@ -422,6 +423,7 @@ class LeadDetailView(BaseAPIView):
 
         data = {
             'id': lead.id,
+            'lead_number': lead.lead_number,
             'status': lead.status,
             'priority': lead.priority,
             'source': lead.lead_source,
