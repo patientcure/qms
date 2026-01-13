@@ -216,13 +216,15 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
         assigned_to = lead.assigned_to
         next_date = LeadDescription.objects.filter(lead=lead).values_list('next_date', flat=True).last()
         
-        # Get PDF URL from associated quotation if it exists
+        # Get PDF URL and quotation number from associated quotation if it exists
         pdf_url = None
+        quotation_number = None
         if lead.quotation_id:
             try:
                 quotation = Quotation.objects.get(pk=lead.quotation_id)
                 if quotation.file_url:
                     pdf_url = quotation.file_url
+                quotation_number = quotation.quotation_number
             except Quotation.DoesNotExist:
                 pass
         
@@ -231,9 +233,10 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
             "status": lead.status,
             "priority": lead.priority,
             "source": lead.lead_source,
-            "next_date":next_date,
+            "next_date": next_date,
             "converted_date": lead.follow_up_date,
             "pdf_url": pdf_url,
+            "quotation_number": quotation_number,
             "customer": {
                 "id": customer.id if customer else None,
                 "name": getattr(customer, "name", None),
