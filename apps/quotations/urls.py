@@ -56,6 +56,7 @@ from .views import (
     CompanyListView,
 )
 from .lead_disc.views import LeadDescriptionManageView
+from .export import get_all_entities_fields
 
 
 app_name = "quotations"
@@ -121,4 +122,7 @@ urlpatterns = [
     path('api/merge/', MergePDFsAPIView.as_view(), name='merge_pdfs'),
     path('api/<int:user_id>/stats/',UserStatsView.as_view(),name="user-stats"),
     path('api/product/image/', ProductImageUploadView.as_view(), name='product_image_upload'),
+
+    # ========== Export Entities Fields API ==========
+    path('api/export/', get_all_entities_fields, name='export_entities_fields'),
 ]
