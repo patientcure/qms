@@ -194,15 +194,17 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
     def get(self, request, filter_path=None):
         user = request.user
         lead_filter = request.GET.get("filter", None)
-        is_converted_request = (
-            filter_path == "converted" or
-            lead_filter == "converted"
-        )
+        is_converted_request = (filter_path == "converted" or lead_filter == "converted")
+        is_lost_request = (filter_path == "lost" or lead_filter == "lost")
+        
         leads = Lead.objects.select_related("customer", "assigned_to", "created_by")
         if is_converted_request:
             leads = leads.filter(status=LeadStatus.CONVERTED)
+        elif is_lost_request:
+            leads = leads.filter(status=LeadStatus.LOST)
         else:
-            leads = leads.exclude(status=LeadStatus.CONVERTED)
+            leads = leads.exclude(status__in=[LeadStatus.CONVERTED, LeadStatus.LOST])
+            
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
 
