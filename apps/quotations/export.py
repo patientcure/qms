@@ -9,6 +9,8 @@ def get_all_entities_fields(request):
         data = json.loads(request.body)
         entity_type = data.get('entity', '').lower()
         requested_fields = data.get('fields', [])
+        from_date = data.get('from_date')
+        to_date = data.get('to_date')
         model_map = {
             'product': Product,
             'quotation': Quotation,
@@ -16,24 +18,26 @@ def get_all_entities_fields(request):
         }
 
         if entity_type not in model_map:
-            return JsonResponse({'error': 'Invalid entity type. Use product, quotation, or lead.'}, status=400)
+            return JsonResponse({'error': 'Invalid entity type'}, status=400)
 
         model = model_map[entity_type]
+        queryset = model.objects.all()
+        if from_date and to_date:
+            queryset = queryset.filter(created_at__range=[from_date, to_date])
+        non_relational_field_names = [
+            f.name for f in model._meta.get_fields() 
+            if not f.is_relation
+        ]
         valid_fields = ['id']
-        model_field_names = [f.name for f in model._meta.get_fields()]
-        
         for field in requested_fields:
-            if field in model_field_names:
+            if field in non_relational_field_names:
                 valid_fields.append(field)
-        entities_data = list(model.objects.all().values(*valid_fields))
+        results = list(queryset.values(*valid_fields))
 
         return JsonResponse({
             'entity': entity_type,
-            'count': len(entities_data),
-            'results': entities_data
+            'count': len(results),
+            'results': results
         }, safe=False)
-
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
