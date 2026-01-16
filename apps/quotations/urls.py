@@ -57,7 +57,7 @@ from .views import (
 )
 from .lead_disc.views import LeadDescriptionManageView
 from .export import get_all_entities_fields
-
+from .product_bulk import BulkProductUploadView
 
 app_name = "quotations"
 
@@ -125,4 +125,6 @@ urlpatterns = [
 
     # ========== Export Entities Fields API ==========
     path('api/export/', get_all_entities_fields, name='export_entities_fields'),
+    # ========== Bulk Product Upload API ========== \
+    path('api/products/bulk-upload/', BulkProductUploadView.as_view(), name='bulk_product_upload'),
 ]
