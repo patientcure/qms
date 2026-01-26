@@ -18,17 +18,18 @@ from reportlab.platypus import (
     ListFlowable, ListItem, Frame, PageTemplate, NextPageTemplate
 )
 from reportlab.lib.units import mm
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.utils import ImageReader
 from .models import TermsAndConditions as Term
 from django.contrib.staticfiles import finders
 
 
 class QuotationPDFGenerator:
-    def __init__(self, quotation, items_data, user=None, company_profile=None, terms=None):
+    def __init__(self, quotation, items_data, user=None, company_profile=None, terms=None, signature=None):
         self.quotation = quotation
         self.items_data = items_data
         self.user = user
+        self.signature = signature
         self.company = company_profile
         self.terms = terms or []
         self.styles = getSampleStyleSheet()
@@ -160,7 +161,7 @@ class QuotationPDFGenerator:
         elements = [
             Paragraph("QUOTATION", self.title_style),
             Paragraph(f"Date: {datetime.now().strftime('%d-%m-%Y')}", self.right_style),
-            Paragraph(f"{self.quotation.quotation_number}", self.right_style),
+            Paragraph(f"Ref No.: {self.quotation.quotation_number}", self.right_style),
             Spacer(1, 8 * mm),
             Paragraph("To:", self.normal_style),
             Spacer(1, 2 * mm),
@@ -220,21 +221,20 @@ class QuotationPDFGenerator:
             product_cell = Paragraph(description, self.normal_style)
 
             image_flowable = None
-            image_url = item.get('image_url') or item.get('image_path')  # accept either key
-            if image_url:
+            image_source = item.get('image_path') or item.get('image_url')           
+            if image_source:
                 try:
-                    if str(image_url).lower().startswith(('http://', 'https://')):
-                        resp = requests.get(image_url, timeout=5)
+                    # Direct Disk Read (Milliseconds)
+                    if os.path.exists(str(image_source)):
+                        image_flowable = RLImage(image_source, width=max_img_w, height=max_img_h, kind='proportional')
+                    # Fallback Network Request (Limited to 1 second)
+                    elif str(image_source).startswith(('http://', 'https://')):
+                        resp = requests.get(image_source, timeout=1)
                         resp.raise_for_status()
                         img_io = io.BytesIO(resp.content)
                         image_flowable = RLImage(img_io, width=max_img_w, height=max_img_h, kind='proportional')
-                    else:
-                        # treat as local file path
-                        if os.path.exists(image_url):
-                            image_flowable = RLImage(image_url, width=max_img_w, height=max_img_h, kind='proportional')
                 except Exception:
-                    # silently ignore image errors and fall back to text only
-                    image_flowable = None
+                    image_flowable = None # Fail gracefully without hanging
 
             if image_flowable:
                 # Create a small two-column table: [image | description]
@@ -437,20 +437,58 @@ class QuotationPDFGenerator:
         return elements
     
     def _build_footer(self):
+        elements = [Spacer(1, 15 * mm)]
+        SIGN_W = 40 * mm
+        SIGN_H = 20 * mm
+        signature_flowable = None
+        signature = self.signature
+
+        if signature and str(signature).strip().lower() not in ("none", ""):
+            try:
+                if os.path.exists(str(signature)):
+                    signature_flowable = RLImage(signature, width=SIGN_W, height=SIGN_H, kind="proportional")
+                elif str(signature).startswith(("http://", "https://")):
+                    resp = requests.get(signature, timeout=1)
+                    resp.raise_for_status()
+                    img_io = io.BytesIO(resp.content)
+                    signature_flowable = RLImage(img_io, width=SIGN_W, height=SIGN_H, kind="proportional")
+            except Exception:
+                signature_flowable = None
         creator_name = "Admin"
         creator_phone = ""
-        user = getattr(self, 'user', None)
+
+        user = getattr(self, "user", None)
         if user and user.is_authenticated:
             creator_name = user.get_full_name() or user.username or "Admin"
-            creator_phone = getattr(user, 'phone_number', "")
-        footer_text = f"Thank you for your business!<br/><br/>Created By<br/>{creator_name}"
-        if creator_phone:
-            footer_text += f"<br/>{creator_phone}"
-        footer_table = Table([[
-            Paragraph(footer_text, self.normal_style)
-        ]], colWidths=[170 * mm])
+            creator_phone = getattr(user, "phone_number", "")
+        thank_you_text = "Thank you for your business!"
+        creator_text = (
+            "For N.K. Prosales Pvt. Ltd.<br/>"
+            f"<b>{creator_name}</b>"
+        )
 
-        return [Spacer(1, 15 * mm), footer_table]
+        if creator_phone:
+            creator_text += f"<br/>{creator_phone}"
+        rows = []
+        rows.append([Paragraph(thank_you_text, self.normal_style)])
+        if signature_flowable:
+            rows.append([signature_flowable])
+        rows.append([Paragraph(creator_text, self.normal_style)])
+
+        footer_table = Table(
+            rows,
+            colWidths=[170 * mm],
+            style=[
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ],
+        )
+
+        elements.append(footer_table)
+        return elements
 
     def generate(self):
         """Generate the complete PDF"""

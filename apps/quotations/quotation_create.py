@@ -11,7 +11,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from .views import BaseAPIView, JWTAuthMixin
 from .models import Product, TermsAndConditions, ActivityLog, Quotation, Customer, Lead, ProductDetails
 from .forms import QuotationForm, CustomerForm
-from .choices import ActivityAction, LeadStatus, QuotationStatus
+from .choices import ActivityAction, LeadStatus, QuotationStatus,LeadSource
 from .save_quotation import save_quotation_pdf
 from .email_service import send_quotation_email
 from apps.accounts.models import User, Roles
@@ -89,9 +89,8 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
         # 4. Log Activity
         log_quotation_changes(quotation, action, user)
 
-        quotation.save(update_fields=['subtotal', 'total', 'file_url', 'has_pdf'])
+        quotation.save(update_fields=['subtotal', 'total', 'file_url', 'has_pdf', 'status'])
         if send_immediately:
-
             quotation.refresh_from_db() 
             try:
                 send_quotation_email(quotation)
@@ -152,9 +151,10 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             if send_immediately:
                 quotation.status = QuotationStatus.PENDING # Initial "sent" status
                 lead = Lead.objects.create(
+                    lead_source = LeadSource.QUOTATION,
                     customer=customer, 
                     assigned_to=quotation.assigned_to, 
-                    status=LeadStatus.PENDING, 
+                    status=LeadStatus.QUALIFIED, 
                     created_by=user, 
                     quotation_id=quotation.id,
                     follow_up_date=quotation.follow_up_date
@@ -172,7 +172,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             return JsonResponse({
                 'success': True, 
                 'message': f"Quotation {quotation.quotation_number} created successfully", 
-                'data': get_quotation_response_data(quotation, lead)
+                'data': get_quotation_response_data(quotation,request ,lead)
             }, status=201)
 
         except Exception as e:
@@ -212,28 +212,29 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
 
             quotation = form.save(commit=False)
             quotation.customer = customer
-            
+            quotation.status = QuotationStatus.REVISED
             # Step 3: Handle status updates and lead creation logic
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
             if original_status == QuotationStatus.DRAFT and send_immediately:
                 # First time sending a DRAFT quotation. Create lead and update status.
-                quotation.status = QuotationStatus.PENDING
+                quotation.status = QuotationStatus.REVISED
                 if not lead:
                     lead = Lead.objects.create(
+                        lead_source = LeadSource.QUOTATION,
                         customer=customer, 
                         assigned_to=quotation.assigned_to, 
-                        status=LeadStatus.PENDING, 
+                        status=LeadStatus.NEGOTIATION, 
                         created_by=user, 
                         quotation_id=quotation.id,
                         follow_up_date=quotation.follow_up_date
                     )
                     quotation.lead_id = lead.id
                     quotation.save(update_fields=["lead_id", "status"])  # Ensure lead_id is saved immediately
-            elif original_status != QuotationStatus.DRAFT:
+            else:
                 # Any update to an already-sent quotation marks it as REVISED.
                 quotation.status = QuotationStatus.REVISED
                 if lead:
-                    lead.status = LeadStatus.REVISED
+                    lead.status = LeadStatus.NEGOTIATION
                     lead.save(update_fields=['status'])
 
             # Step 4: Process items, totals, PDF, and email
@@ -246,7 +247,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             return JsonResponse({
                 "success": True,
                 "message": f"Quotation {quotation.quotation_number} updated successfully",
-                "data": get_quotation_response_data(quotation, lead)
+                "data": get_quotation_response_data(quotation,request ,lead)
             }, status=200)
 
         except Quotation.DoesNotExist:

@@ -98,7 +98,7 @@ class BaseAPIView(View):
 # ========== Salesperson Management ==========
 class SalespersonListView(AdminRequiredMixin, BaseAPIView):
     def get(self, request):
-        salespeople = User.objects.filter(role=Roles.SALESPERSON)
+        salespeople = User.objects.filter(role=Roles.SALESPERSON).order_by('-date_joined')
         data = []
         for person in salespeople:
             data.append({
@@ -194,18 +194,21 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
     def get(self, request, filter_path=None):
         user = request.user
         lead_filter = request.GET.get("filter", None)
-        is_converted_request = (
-            filter_path == "converted" or
-            lead_filter == "converted"
-        )
+        is_converted_request = (filter_path == "converted" or lead_filter == "converted")
+        is_lost_request = (filter_path == "lost" or lead_filter == "lost")
+        
         leads = Lead.objects.select_related("customer", "assigned_to", "created_by")
         if is_converted_request:
             leads = leads.filter(status=LeadStatus.CONVERTED)
+        elif is_lost_request:
+            leads = leads.filter(status=LeadStatus.LOST)
         else:
-            leads = leads.exclude(status=LeadStatus.CONVERTED)
+            leads = leads.exclude(status__in=[LeadStatus.CONVERTED, LeadStatus.LOST])
+            
         if getattr(user, "role", None) == Roles.SALESPERSON:
             leads = leads.filter(Q(assigned_to=user) | Q(created_by=user))
 
+        leads = leads.order_by("-created_at")
         data = [self.serialize_lead(lead) for lead in leads]
         return JsonResponse({"data": data}, status=200, safe=False)
 
@@ -214,13 +217,29 @@ class LeadListView(JWTAuthMixin, BaseAPIView):
         customer = lead.customer
         assigned_to = lead.assigned_to
         next_date = LeadDescription.objects.filter(lead=lead).values_list('next_date', flat=True).last()
+        
+        # Get PDF URL and quotation number from associated quotation if it exists
+        pdf_url = None
+        quotation_number = None
+        if lead.quotation_id:
+            try:
+                quotation = Quotation.objects.get(pk=lead.quotation_id)
+                if quotation.file_url:
+                    pdf_url = quotation.file_url
+                quotation_number = quotation.quotation_number
+            except Quotation.DoesNotExist:
+                pass
+        
         return {
             "id": lead.id,
+            "lead_number": lead.lead_number,
             "status": lead.status,
             "priority": lead.priority,
             "source": lead.lead_source,
-            "next_date":next_date,
+            "next_date": next_date,
             "converted_date": lead.follow_up_date,
+            "pdf_url": pdf_url,
+            "quotation_number": quotation_number,
             "customer": {
                 "id": customer.id if customer else None,
                 "name": getattr(customer, "name", None),
@@ -397,7 +416,7 @@ class LeadDetailView(BaseAPIView):
         if lead.quotation_id:
             try:
                 quotation = Quotation.objects.prefetch_related('details__product', 'terms').get(pk=lead.quotation_id)
-                quotation_data = get_quotation_response_data(quotation, lead)
+                quotation_data = get_quotation_response_data(quotation,request ,lead)
             except Quotation.DoesNotExist:
                 quotation_data = None
             except Exception:
@@ -406,6 +425,7 @@ class LeadDetailView(BaseAPIView):
 
         data = {
             'id': lead.id,
+            'lead_number': lead.lead_number,
             'status': lead.status,
             'priority': lead.priority,
             'source': lead.lead_source,
@@ -459,6 +479,14 @@ class LeadAssignView(AdminRequiredMixin, BaseAPIView):
             lead.assigned_to = salesperson
             message = f"Lead assigned to {salesperson.get_full_name()}"
 
+            if lead.quotation_id:
+                try:
+                    quotation = Quotation.objects.get(pk=lead.quotation_id)
+                    quotation.assigned_to = salesperson
+                    quotation.save()
+                except Quotation.DoesNotExist:
+                    pass
+
         lead.save()
         return JsonResponse({
             'success': True, 
@@ -487,6 +515,7 @@ class QuotationListView(JWTAuthMixin, BaseAPIView):
                 quotations = quotations.filter(Q(assigned_to=user) | Q(created_by=user))
             else:
                 logger.info(f"User '{user.username}' is not a salesperson (or is admin). Showing all quotations.")
+            quotations = quotations.order_by('-created_at')
 
             quotation_ids = quotations.values_list("id", flat=True)
             
@@ -599,7 +628,7 @@ class QuotationDetailView(BaseAPIView):
             
             lead = Lead.objects.filter(quotation_id=quotation.id).first()
             
-            response_data = get_quotation_response_data(quotation, lead)
+            response_data = get_quotation_response_data(quotation,request ,lead)
             
             return JsonResponse({
                 'success': True,
@@ -655,6 +684,12 @@ class QuotationAssignView(AdminRequiredMixin, BaseAPIView):
             salesperson = get_object_or_404(User, pk=assigned_to_id, role__in=[Roles.SALESPERSON, Roles.ADMIN])
             quotation.assigned_to = salesperson
             message = f"Quotation assigned to {salesperson.get_full_name()}"
+            
+            if quotation.lead_id:
+                lead = Lead.objects.filter(pk=quotation.lead_id).first()
+                if lead:
+                    lead.assigned_to = salesperson
+                    lead.save()
         # else:
         #     quotation.assigned_to = None
         #     message = "Quotation assignment removed"
@@ -695,7 +730,7 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
 
         customers = Customer.objects.prefetch_related(
             Prefetch('leads', queryset=leads_qs, to_attr='filtered_leads')
-        )
+        ).order_by('-created_at')
 
         data = []
         for customer in customers:
@@ -1116,7 +1151,7 @@ class ProductSearchView(JWTAuthMixin, BaseAPIView):
         name = request.GET.get('name', '').strip()
         if not name:
             return JsonResponse({'error': 'Missing "name" parameter'}, status=400)
-        products = Product.objects.filter(Q(name__icontains=name))
+        products = Product.objects.filter(Q(name__icontains=name)).order_by('-created_at')
         data = []
         for product in products:
             data.append({
@@ -1139,7 +1174,7 @@ class CustomerSearchView(BaseAPIView):
         name = request.GET.get('name', '').strip()
         if not name:
             return JsonResponse({'error': 'Missing "name" parameter'}, status=400)
-        customers = Customer.objects.filter(Q(name__icontains=name))
+        customers = Customer.objects.filter(Q(name__icontains=name)).order_by('-created_at')
         data = []
         for customer in customers:
             data.append({
@@ -1151,10 +1186,18 @@ class CustomerSearchView(BaseAPIView):
                 'address': customer.primary_address
             })
         return JsonResponse({'data': data})
+
+
+class CompanyListView(BaseAPIView):
+    def get(self, request):
+        companies_qs = Customer.objects.exclude(company_name__isnull=True).exclude(company_name__exact='')
+        companies = companies_qs.values_list('company_name', flat=True).distinct().order_by('company_name')
+        return JsonResponse({'data': list(companies)})
+
 #region Product Management
 class ProductListView(BaseAPIView):
     def get(self, request):
-        products = Product.objects.all().prefetch_related('images')        
+        products = Product.objects.all().prefetch_related('images').order_by('-created_at')        
         data = []
         for product in products:
             image_url = []
@@ -1320,18 +1363,11 @@ class TopPerfomerView(BaseAPIView):
             # --- 1. Handle Query Parameters using request.GET ---
             start_date_str = request.GET.get('start_date')
             end_date_str = request.GET.get('end_date')
-            limit = request.GET.get('limit', 10)
 
             logger.info(
                 f"TopPerformerView request received with params: start_date='{start_date_str}', "
-                f"end_date='{end_date_str}', limit='{limit}'"
+                f"end_date='{end_date_str}'"
             )
-
-            try:
-                limit = int(limit)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid limit parameter '{limit}'. Falling back to default of 10.")
-                limit = 10
 
             # --- 2. Build Date Filter for Quotations ---
             quotation_filters = Q()
@@ -1365,7 +1401,7 @@ class TopPerfomerView(BaseAPIView):
             
             logger.debug(f"Top Performers Query SQL: {top_performers.query}")
 
-            top_performers = top_performers[:limit]
+            top_performers = top_performers
 
             result = [
                 {
@@ -1405,6 +1441,7 @@ class PopupView(JWTAuthMixin, BaseAPIView):
         if getattr(user, 'role', None) == Roles.SALESPERSON:
             leads_qs = leads_qs.filter(Q(assigned_to=user) | Q(created_by=user))
 
+        leads_qs = leads_qs.order_by('-created_at')
         data = []
         for lead in leads_qs:
             customer = lead.customer

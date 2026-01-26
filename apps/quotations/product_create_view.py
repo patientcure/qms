@@ -9,7 +9,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 
 from .views import BaseAPIView, JWTAuthMixin
-from .models import CompanyProfile, Product, Category
+from .models import  Product, Category
 from .forms import ProductForm
 from django.db.models import ProtectedError
 

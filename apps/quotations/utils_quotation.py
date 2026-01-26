@@ -3,6 +3,7 @@
 from decimal import Decimal
 import logging
 from django.http import JsonResponse
+from httpcore import request
 from .models import Product, ProductDetails, TermsAndConditions, ActivityLog,Customer
 from .choices import ActivityAction
 from .forms import CustomerForm
@@ -128,7 +129,7 @@ def handle_validation_errors(form):
     errors = {'form': form.errors}
     return JsonResponse({'success': False, 'errors': errors}, status=400)
 
-def get_quotation_response_data(quotation, lead, term_ids=None):
+def get_quotation_response_data(quotation,request,lead,term_ids=None):
     try:
         items = []
         for detail in quotation.details.select_related('product').all():
@@ -141,9 +142,20 @@ def get_quotation_response_data(quotation, lead, term_ids=None):
             discount_amount = gross_total * (discount_percent / 100)
             net_total = gross_total - discount_amount
             
+            image_url = None
+            if product.image:
+                try:
+                    image_url = request.build_absolute_uri(product.image.url)
+                except Exception:
+                    image_url = None
+
             items.append({
                 'id': detail.id,
-                'product': {'id': product.id, 'name': product.name},
+                'product': {
+                    'id': product.id, 
+                    'name': product.name, 
+                    'image_url': image_url
+                },
                 'description': product.name,
                 'quantity': float(quantity),
                 'unit_price': float(unit_price),

@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST, require_http_methods
 from django.utils.decorators import method_decorator
 from django.views.generic import View
 from django.contrib.auth.mixins import LoginRequiredMixin
-from apps.quotations.models import Quotation, ActivityAction, ActivityLog, QuotationStatus, Lead
+from apps.quotations.models import Quotation, ActivityAction, ActivityLog, QuotationStatus, Lead,LeadStatus
 from datetime import datetime
 import json
 import traceback
@@ -367,6 +367,22 @@ class QuotationStatusUpdateView(JWTAuthMixin, BaseAPIView):
                                 message=f"Status changed from {old_lead_status} to {lead.status} due to quotation {quotation.quotation_number}",
                                 customer=lead.customer,
                             )
+                        # If quotation revised -> mark lead negotiation
+                        if quotation.status == QuotationStatus.REVISED and lead.status != LeadStatus.NEGOTIATION:
+                            try:
+                                old_lead_status = lead.status
+                                lead.status = LeadStatus.NEGOTIATION
+                                lead.save(update_fields=['status'])
+                                ActivityLog.log(
+                                    actor=request.user,
+                                    action=ActivityAction.LEAD_STATUS_CHANGED,
+                                    entity=lead,
+                                    message=f"Status changed from {old_lead_status} to {lead.status} due to quotation {quotation.quotation_number}",
+                                    customer=lead.customer,
+                                )
+                            except Exception:
+                                # Non-fatal: continue even if cascading fails
+                                pass
             except Exception:
                 # Don't let cascading failures block the main update
                 pass
@@ -465,7 +481,7 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                                 customer=q.customer,
                             )
                     # If lead lost -> mark related quotations rejected
-                    if lead.status == 'LOST':
+                    if lead.status == LeadStatus.LOST:
                         related_qs = Quotation.objects.filter(lead_id=lead.id).exclude(status=QuotationStatus.REJECTED)
                         for q in related_qs:
                             old_q_status = q.status
@@ -478,6 +494,24 @@ class LeadStatusUpdateView(JWTAuthMixin,BaseAPIView):
                                 message=f"Status changed from {old_q_status} to {q.status} due to lead {lead.id} lost",
                                 customer=q.customer,
                             )
+                    # If lead negotiation -> mark related quotations revised
+                    if lead.status == LeadStatus.NEGOTIATION:
+                        related_qs = Quotation.objects.filter(lead_id=lead.id).exclude(status=QuotationStatus.REVISED)
+                        for q in related_qs:
+                            try:
+                                old_q_status = q.status
+                                q.status = QuotationStatus.REVISED
+                                q.save(update_fields=['status'])
+                                ActivityLog.log(
+                                    actor=request.user,
+                                    action=ActivityAction.QUOTATION_STATUS_CHANGED,
+                                    entity=q,
+                                    message=f"Status changed from {old_q_status} to {q.status} due to lead {lead.id} negotiation",
+                                    customer=q.customer,
+                                )
+                            except Exception:
+                                # Non-fatal: continue even if one update fails
+                                pass
                 except Exception:
                     # Non-fatal: continue even if cascading fails
                     pass

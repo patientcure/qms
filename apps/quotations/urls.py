@@ -53,9 +53,11 @@ from .views import (
     UnfilteredCustomerListView,
     UserStatsView,
     PopupView,
+    CompanyListView,
 )
 from .lead_disc.views import LeadDescriptionManageView
-
+from .export import get_all_entities_fields
+from .product_bulk import BulkProductUploadView
 
 app_name = "quotations"
 
@@ -106,6 +108,7 @@ urlpatterns = [
     path('api/customers/search/', CustomerSearchView.as_view(), name='customer_search'),
     path('api/customers/filtered/', FilteredCustomerListView.as_view(), name='customer_filtered_list'),
     path('api/customers/unfiltered/', UnfilteredCustomerListView.as_view(), name='customer_unfiltered_list'),
+    path('api/companies/', CompanyListView.as_view(), name='company_list'),
     # ========== Dashboard Stats API ==========
     path('api/dashboard/admin/stats/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
     path('api/dashboard/salesperson/stats/', SalespersonDashboardStatsView.as_view(), name='salesperson_dashboard_stats'),
@@ -119,4 +122,9 @@ urlpatterns = [
     path('api/merge/', MergePDFsAPIView.as_view(), name='merge_pdfs'),
     path('api/<int:user_id>/stats/',UserStatsView.as_view(),name="user-stats"),
     path('api/product/image/', ProductImageUploadView.as_view(), name='product_image_upload'),
+
+    # ========== Export Entities Fields API ==========
+    path('api/export/', get_all_entities_fields, name='export_entities_fields'),
+    # ========== Bulk Product Upload API ========== \
+    path('api/products/bulk-upload/', BulkProductUploadView.as_view(), name='bulk_product_upload'),
 ]

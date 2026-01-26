@@ -4,7 +4,7 @@ from django.db import models, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from .choices import LeadStatus, QuotationStatus, ActivityAction,CATEGORY_CHOICES,UNIT_CHOICES,LeadPriority,LeadSource
-from apps.quotations.utils import generate_next_quotation_number
+from apps.quotations.utils import generate_next_quotation_number,create_next_lead_number
 User = settings.AUTH_USER_MODEL
 from crum import get_current_user
 from apps.accounts.models import User,Roles
@@ -110,11 +110,12 @@ class EmailTemplate(TimestampedModel):
         return self.title
 
 class Lead(TimestampedModel):
+    lead_number = models.CharField(max_length=30, unique=True, editable=False, null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="leads")
     assigned_to = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
     )
-    status = models.CharField(max_length=20, choices=LeadStatus.choices, default=LeadStatus.PENDING)
+    status = models.CharField(max_length=20, choices=LeadStatus.choices, default=LeadStatus.PROSPECTIVE)
     lead_source = models.CharField(max_length=20, choices=LeadSource.choices, null=True, blank=True)
     priority = models.CharField(max_length=20, choices=LeadPriority.choices, default=LeadPriority.MEDIUM)
     follow_up_date = models.DateField(null=True, blank=True)
@@ -135,8 +136,9 @@ class Lead(TimestampedModel):
             user = get_current_user()
             if user and not user.is_anonymous:
                 self.created_by = user
+        if not self.lead_number:
+            self.lead_number = create_next_lead_number()
         super().save(*args, **kwargs)
-    
     @staticmethod
     def get_least_loaded_salesperson():
         return (
@@ -311,3 +313,10 @@ class ProductImage(TimestampedModel):
 
     def __str__(self):
         return f"Image for {self.product.name}"
+    
+class SignatureImage(TimestampedModel):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='signature')
+    image = models.ImageField(upload_to='signatures/')
+
+    def __str__(self):
+        return f"Signature for User {self.user.get_full_name()}"

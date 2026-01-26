@@ -29,6 +29,8 @@ class LeadStatus(models.TextChoices):
     PROPOSAL = 'PROPOSAL', _('Proposal Sent')
     PRIORITY = 'PRIORITY', _('Priority')
     REVISED = 'REVISED', _('Revised')
+    PROSPECTIVE = 'PROSPECTIVE', _('Prospective')
+    NEGOTIATION = 'NEGOTIATION', _('Negotiation')
 
 class QuotationStatus(models.TextChoices):
     LOST = 'LOST', 'Lost'
@@ -39,6 +41,8 @@ class QuotationStatus(models.TextChoices):
     REJECTED = 'REJECTED', 'Rejected'
     EXPIRED = 'EXPIRED', 'Expired'
     REVISED = 'REVISED', 'Revised'
+    NEGOTIATION = 'NEGOTIATION', 'Negotiation'
+
 class ActivityAction(models.TextChoices):
     # User actions
     LOGIN = 'LOGIN', _('User Login')

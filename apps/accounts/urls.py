@@ -16,6 +16,7 @@ from .views import (
     EditUserView,
     AdminManageUserView
 )
+from apps.quotations.signature_view import SignatureManageView
 
 app_name = "accounts"
 
@@ -44,5 +45,7 @@ urlpatterns = [
 
     path("api/salespeople/<int:user_id>/permissions/", AdminManagePermissionsView.as_view(), name="manage_permissions"),
     path("api/user/my-permissions/", MyPermissionsView.as_view(), name="my_permissions"),
+
+    path("api/signature/", SignatureManageView.as_view(), name="signature_manage"),
 
 ]
