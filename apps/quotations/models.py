@@ -191,6 +191,7 @@ class Quotation(TimestampedModel):
     )
     currency = models.CharField(max_length=10, default="INR")
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    is_tax_inclusive = models.BooleanField(default=False)
     tax_rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     additional_charge_name = models.CharField(max_length=100, blank=True, null=True, default="Additional Charges")
