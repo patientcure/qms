@@ -54,6 +54,7 @@ from .views import (
     UserStatsView,
     PopupView,
     CompanyListView,
+    LeadQuotationsView,
 )
 from .lead_disc.views import LeadDescriptionManageView
 from .export import get_all_entities_fields
@@ -76,6 +77,7 @@ urlpatterns = [
 
     # ============ Lead Description Management API ==========
     path('api/leads/<int:lead_id>/descriptions/', LeadDescriptionManageView.as_view(), name='lead_description_manage'), 
+    path('api/leads/<int:lead_id>/quotations/', LeadQuotationsView.as_view(), name='lead_quotations'),
     
     # ========== Quotation Management API ==========
     path('api/quotations/', QuotationListView.as_view(), name='quotation_list'),

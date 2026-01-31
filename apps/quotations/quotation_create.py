@@ -9,7 +9,7 @@ from django.db.models import Count
 from django.core.exceptions import ObjectDoesNotExist
 
 from .views import BaseAPIView, JWTAuthMixin
-from .models import Product, TermsAndConditions, ActivityLog, Quotation, Customer, Lead, ProductDetails
+from .models import Product, TermsAndConditions, ActivityLog, Quotation, Customer, Lead, ProductDetails, QuotationLeadLink
 from .forms import QuotationForm, CustomerForm
 from .choices import ActivityAction, LeadStatus, QuotationStatus,LeadSource
 from .save_quotation import save_quotation_pdf
@@ -106,9 +106,6 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
 
     @transaction.atomic
     def post(self, request):
-        """
-        Handles creating a new Quotation.
-        """
         try:
             request_json = getattr(request, 'json', {})
             user = request.user
@@ -159,6 +156,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                     quotation_id=quotation.id,
                     follow_up_date=quotation.follow_up_date
                 )
+                QuotationLeadLink.objects.create(quotation=quotation, lead=lead)
                 quotation.lead_id = lead.id
                 quotation.save(update_fields=["lead_id", "status"]) 
 
@@ -194,9 +192,10 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             if not quotation_id:
                 return JsonResponse({"success": False, "error": "Quotation ID is required"}, status=400)
             
-            quotation = Quotation.objects.get(id=quotation_id)
-            original_status = quotation.status
-            
+            original_quotation = Quotation.objects.get(id=quotation_id)
+            lead = None
+            if original_quotation.lead_id:
+                lead = Lead.objects.get(id=original_quotation.lead_id)
             # Step 1: Handle Customer
             customer, error_response = self._handle_customer(request_json.get("customer", {}))
             if error_response:
@@ -206,36 +205,36 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             quotation_data = {k: v for k, v in request_json.items() if k not in [
                 "items", "terms", "send_immediately", "auto_assign", "customer", "quotation_id"
             ]}
-            form = QuotationForm(quotation_data, instance=quotation)
+            form = QuotationForm(quotation_data)
             if not form.is_valid():
                 return handle_validation_errors(form)
 
             quotation = form.save(commit=False)
             quotation.customer = customer
-            quotation.status = QuotationStatus.REVISED
-            # Step 3: Handle status updates and lead creation logic
-            lead = Lead.objects.filter(quotation_id=quotation.id).first()
-            if original_status == QuotationStatus.DRAFT and send_immediately:
-                # First time sending a DRAFT quotation. Create lead and update status.
-                quotation.status = QuotationStatus.REVISED
-                if not lead:
-                    lead = Lead.objects.create(
-                        lead_source = LeadSource.QUOTATION,
-                        customer=customer, 
-                        assigned_to=quotation.assigned_to, 
-                        status=LeadStatus.NEGOTIATION, 
-                        created_by=user, 
-                        quotation_id=quotation.id,
-                        follow_up_date=quotation.follow_up_date
-                    )
-                    quotation.lead_id = lead.id
-                    quotation.save(update_fields=["lead_id", "status"])  # Ensure lead_id is saved immediately
-            else:
-                # Any update to an already-sent quotation marks it as REVISED.
-                quotation.status = QuotationStatus.REVISED
-                if lead:
-                    lead.status = LeadStatus.NEGOTIATION
-                    lead.save(update_fields=['status'])
+            quotation.status = QuotationStatus.PENDING
+            quotation.created_by = user
+            quotation.lead_id = lead.id if lead else None            
+            if not quotation.assigned_to:
+                if getattr(user, 'role', None) == Roles.SALESPERSON:
+                    quotation.assigned_to = user
+                else:
+                    salesperson = User.objects.filter(role=Roles.SALESPERSON, is_active=True).annotate(
+                        num_quotations=Count('quotations')
+                    ).order_by('num_quotations', 'id').first()
+                    quotation.assigned_to = salesperson            
+            quotation.save()
+            if lead:
+                try:
+                    original_quotation.status = QuotationStatus.REVISED
+                    original_quotation.save(update_fields=['status'])
+                except Exception:
+                    logger.exception("Failed to mark original quotation as REVISED")
+
+                QuotationLeadLink.objects.get_or_create(quotation=original_quotation, lead=lead)
+                QuotationLeadLink.objects.get_or_create(quotation=quotation, lead=lead)
+                lead.quotation_id = quotation.id
+                lead.status = LeadStatus.NEGOTIATION
+                lead.save(update_fields=['status', 'quotation_id'])
 
             # Step 4: Process items, totals, PDF, and email
             self._process_quotation_data(quotation, request, user, action=ActivityAction.QUOTATION_UPDATED)
@@ -243,10 +242,10 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             # Step 5: Final Save with all updates
             quotation.save()
 
-            logger.info(f"Quotation {quotation.quotation_number} updated successfully")
+            logger.info(f"New Quotation {quotation.quotation_number} created as revision")
             return JsonResponse({
                 "success": True,
-                "message": f"Quotation {quotation.quotation_number} updated successfully",
+                "message": f"New Quotation {quotation.quotation_number} created successfully",
                 "data": get_quotation_response_data(quotation,request ,lead)
             }, status=200)
 
