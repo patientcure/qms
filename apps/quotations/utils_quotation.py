@@ -201,6 +201,7 @@ def get_quotation_response_data(quotation,request,lead,term_ids=None):
             'lead': {
                 'id': lead.id, 
                 'status': lead.status, 
+                'lead_number': lead.lead_number,
                 'priority': lead.priority, 
                 'follow_up_date': lead.follow_up_date, 
                 'quotation_id': lead.quotation_id, 
