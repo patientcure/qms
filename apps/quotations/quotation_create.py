@@ -145,19 +145,30 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
 
             # Step 5: Create Lead and update status ONLY if send_immediately is true
             lead = None
+            lead_id = request_json.get('lead_id')
             if send_immediately:
                 quotation.status = QuotationStatus.PENDING # Initial "sent" status
-                lead = Lead.objects.create(
-                    lead_source = LeadSource.QUOTATION,
-                    customer=customer, 
-                    assigned_to=quotation.assigned_to, 
-                    status=LeadStatus.QUALIFIED, 
-                    created_by=user, 
-                    quotation_id=quotation.id,
-                    follow_up_date=quotation.follow_up_date
-                )
-                QuotationLeadLink.objects.create(quotation=quotation, lead=lead)
-                quotation.lead_id = lead.id
+                if lead_id:
+                    # Link existing lead
+                    try:
+                        lead = Lead.objects.get(id=lead_id)
+                        QuotationLeadLink.objects.get_or_create(quotation=quotation, lead=lead)
+                        quotation.lead_id = lead.id
+                    except Lead.DoesNotExist:
+                        logger.warning(f"Lead with id {lead_id} not found")
+                else:
+                    # Create new lead
+                    lead = Lead.objects.create(
+                        lead_source = LeadSource.QUOTATION,
+                        customer=customer, 
+                        assigned_to=quotation.assigned_to, 
+                        status=LeadStatus.QUALIFIED, 
+                        created_by=user, 
+                        quotation_id=quotation.id,
+                        follow_up_date=quotation.follow_up_date
+                    )
+                    QuotationLeadLink.objects.create(quotation=quotation, lead=lead)
+                    quotation.lead_id = lead.id
                 quotation.save(update_fields=["lead_id", "status"]) 
 
             # Step 6: Process items, totals, PDF, and email
