@@ -638,6 +638,22 @@ class QuotationDetailView(BaseAPIView):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+    def delete(self, request, quotation_id):
+        """
+        Deletes a quotation
+        """
+        try:
+            quotation = get_object_or_404(Quotation, pk=quotation_id)
+            quotation_number = quotation.quotation_number
+            quotation.delete()
+
+            return JsonResponse({
+                'success': True,
+                'message': f"Quotation {quotation_number} deleted successfully."
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 class LeadQuotationsView(JWTAuthMixin, BaseAPIView):
     """Return all quotations linked to a lead via QuotationLeadLink."""
@@ -779,7 +795,7 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
                         file_url = Quotation.objects.get(pk=lead.quotation_id).file_url
                     except Quotation.DoesNotExist:
                         pass
-                if lead.status == LeadStatus.CONVERTED:
+                if lead.status in [LeadStatus.CONVERTED, LeadStatus.LOST]:
                     continue
                 leads_data.append({
                     'id': lead.id,
