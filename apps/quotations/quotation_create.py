@@ -152,6 +152,11 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                     # Link existing lead
                     try:
                         lead = Lead.objects.get(id=lead_id)
+                        # Mark all old quotations of this lead as REVISED
+                        old_quotations = Quotation.objects.filter(lead_id=lead.id).exclude(id=quotation.id)
+                        old_quotations.update(status=QuotationStatus.REVISED)
+                        # Assign new quotation to the same person as the lead
+                        quotation.assigned_to = lead.assigned_to
                         QuotationLeadLink.objects.get_or_create(quotation=quotation, lead=lead)
                         quotation.lead_id = lead.id
                     except Lead.DoesNotExist:
@@ -169,7 +174,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                     )
                     QuotationLeadLink.objects.create(quotation=quotation, lead=lead)
                     quotation.lead_id = lead.id
-                quotation.save(update_fields=["lead_id", "status"]) 
+                quotation.save(update_fields=["lead_id", "status", "assigned_to"]) 
 
             # Step 6: Process items, totals, PDF, and email
             self._process_quotation_data(quotation, request, user, action=ActivityAction.QUOTATION_CREATED)
