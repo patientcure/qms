@@ -110,10 +110,18 @@ def calculate_totals_from_details(quotation):
 
     # Step 4: Apply tax on net (after all discounts)
     tax_rate = quotation.tax_rate or Decimal('0.00')
-    tax_amount = subtotal_before_tax * (tax_rate / Decimal('100.00'))
+    tax_amount = Decimal('0.00')
+    final_total = subtotal_before_tax
 
-    # Step 5: Final total = (discounted subtotal + additional charges) + tax
-    final_total = subtotal_before_tax + tax_amount
+    # If tax is NOT inclusive, compute tax on top of subtotal_before_tax
+    if not getattr(quotation, 'is_tax_inclusive', False):
+        tax_amount = subtotal_before_tax * (tax_rate / Decimal('100.00'))
+        final_total = subtotal_before_tax + tax_amount
+    else:
+        # Tax is inclusive in subtotal_before_tax. Do not extract—leave tax amount zero and
+        # treat subtotal_before_tax as the final total.
+        tax_amount = Decimal('0.00')
+        final_total = subtotal_before_tax
 
     return {
         'subtotal': subtotal_after_item_disc.quantize(Decimal('0.01')),
@@ -122,6 +130,7 @@ def calculate_totals_from_details(quotation):
         'overall_discount': overall_discount_amount.quantize(Decimal('0.01')),
         'additional_charge': additional_charge.quantize(Decimal('0.01')),
         'tax': tax_amount.quantize(Decimal('0.01')),
+        'is_tax_inclusive': bool(getattr(quotation, 'is_tax_inclusive', False)),
     }
 
 
@@ -186,6 +195,7 @@ def get_quotation_response_data(quotation,request,lead,term_ids=None):
             'additional_charge_name': quotation.additional_charge_name,
             'additional_charge_amount': float(quotation.additional_charge_amount or 0.0),
             'currency': quotation.currency,
+            'is_tax_inclusive': bool(getattr(quotation, 'is_tax_inclusive', False)),
             'customer': {
                 'id': quotation.customer.id, 
                 'name': quotation.customer.name, 
@@ -201,6 +211,7 @@ def get_quotation_response_data(quotation,request,lead,term_ids=None):
             'lead': {
                 'id': lead.id, 
                 'status': lead.status, 
+                'lead_number': lead.lead_number,
                 'priority': lead.priority, 
                 'follow_up_date': lead.follow_up_date, 
                 'quotation_id': lead.quotation_id, 

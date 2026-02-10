@@ -124,6 +124,7 @@ class Lead(TimestampedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, related_name="leads_created"
     )
     quotation_id = models.IntegerField(null=True, blank=True)
+    
 
     class Meta:
         indexes = [
@@ -148,6 +149,17 @@ class Lead(TimestampedModel):
             .order_by('num_leads', 'id')
             .first()
         )
+
+class QuotationLeadLink(TimestampedModel):
+    """
+    Links a `Quotation` to a `Lead`. Use this to group all quotations
+    related to the same lead (original + revisions).
+    """
+    quotation = models.ForeignKey('Quotation', on_delete=models.CASCADE, related_name='lead_links')
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='quotation_links')
+
+    def __str__(self):
+        return f"Link: Quotation {self.quotation_id} <-> Lead {self.lead_id}"
 
 class LeadDescription(TimestampedModel):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='descriptions')
@@ -179,6 +191,7 @@ class Quotation(TimestampedModel):
     )
     currency = models.CharField(max_length=10, default="INR")
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    is_tax_inclusive = models.BooleanField(default=False)
     tax_rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     additional_charge_name = models.CharField(max_length=100, blank=True, null=True, default="Additional Charges")

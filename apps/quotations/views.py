@@ -17,6 +17,7 @@ from .models import (
     Quotation, Lead, Customer, Product,ProductImage,
     TermsAndConditions, CompanyProfile, ActivityLog,Category, LeadDescription
 )
+from .models import QuotationLeadLink
 from .forms import (
     SalespersonForm, LeadForm,
     QuotationForm,
@@ -638,6 +639,54 @@ class QuotationDetailView(BaseAPIView):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
     def delete(self, request, quotation_id):
+        """
+        Deletes a quotation
+        """
+        try:
+            quotation = get_object_or_404(Quotation, pk=quotation_id)
+            quotation_number = quotation.quotation_number
+            quotation.delete()
+
+            return JsonResponse({
+                'success': True,
+                'message': f"Quotation {quotation_number} deleted successfully."
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+class LeadQuotationsView(JWTAuthMixin, BaseAPIView):
+    """Return all quotations linked to a lead via QuotationLeadLink."""
+    def get(self, request, lead_id):
+        try:
+            lead = get_object_or_404(Lead, pk=lead_id)
+
+            quotations = Quotation.objects.filter(lead_links__lead=lead).select_related(
+                'customer', 'assigned_to', 'created_by'
+            ).prefetch_related('terms', 'details__product').order_by('-created_at')
+
+            data = []
+            for quotation in quotations:
+                data.append({
+                    'id': quotation.id,
+                    'quotation_number': quotation.quotation_number,
+                    'status': quotation.status,
+                    'url': quotation.file_url,
+                    'subtotal': float(quotation.subtotal),
+                    'total': float(quotation.total),
+                    'created_at': quotation.created_at,
+                    'assigned_to': {
+                        'id': quotation.assigned_to.id if quotation.assigned_to else None,
+                        'name': quotation.assigned_to.get_full_name() if quotation.assigned_to else None
+                    }
+                })
+
+            return JsonResponse({'data': data}, status=200)
+        except Exception as e:
+            logger.exception("Failed to fetch lead quotations")
+            return JsonResponse({'success': False, 'error': 'Internal server error'}, status=500)
+
+    def delete(self, request, quotation_id):
 
         quotation = get_object_or_404(Quotation, pk=quotation_id)
 
@@ -746,7 +795,7 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
                         file_url = Quotation.objects.get(pk=lead.quotation_id).file_url
                     except Quotation.DoesNotExist:
                         pass
-                if lead.status == LeadStatus.CONVERTED:
+                if lead.status in [LeadStatus.CONVERTED, LeadStatus.LOST]:
                     continue
                 leads_data.append({
                     'id': lead.id,

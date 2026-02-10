@@ -302,10 +302,15 @@ class QuotationPDFGenerator:
         subtotal_before_tax = subtotal_after_all_discounts + additional_charge_amount
         
         tax_rate = self._to_decimal(getattr(self.quotation, 'tax_rate', 0))
-        tax_amount = subtotal_before_tax * (tax_rate / 100)
+        tax_amount = Decimal('0.00')
         tax_label = f'Tax ({tax_rate}%):' if tax_rate > 0 else 'Tax:'
-
-        grand_total = subtotal_before_tax + tax_amount
+        # If tax is inclusive, don't add tax to grand total; mark as INCLUSIVE for display
+        if getattr(self.quotation, 'is_tax_inclusive', False):
+            tax_amount = Decimal('0.00')
+            grand_total = subtotal_before_tax
+        else:
+            tax_amount = subtotal_before_tax * (tax_rate / 100)
+            grand_total = subtotal_before_tax + tax_amount
         val_style = ParagraphStyle('TotalVal', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, textColor=self.dark_gray)
         grand_total_style = ParagraphStyle('GrandTotal', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, fontName='Helvetica-Bold', textColor=self.primary_blue)
         label_style = ParagraphStyle('TotalLabel', parent=self.styles['Normal'], fontSize=10, alignment=TA_RIGHT, fontName='Helvetica-Bold', textColor=self.dark_gray)
@@ -324,10 +329,17 @@ class QuotationPDFGenerator:
         if additional_charge_amount > 0:
             totals_data.append(create_row(f'{additional_charge_name}:', self._format_currency(additional_charge_amount)))
         
-        totals_data.extend([
-            create_row(tax_label, self._format_currency(tax_amount)),
-            create_row('Total Amount:', self._format_currency(grand_total), is_grand_total=True),
-        ])
+        # For inclusive tax, show 'INCLUSIVE' text instead of numeric tax amount
+        if getattr(self.quotation, 'is_tax_inclusive', False):
+            totals_data.extend([
+                create_row(tax_label, 'INCLUSIVE'),
+                create_row('Total Amount:', self._format_currency(grand_total), is_grand_total=True),
+            ])
+        else:
+            totals_data.extend([
+                create_row(tax_label, self._format_currency(tax_amount)),
+                create_row('Total Amount:', self._format_currency(grand_total), is_grand_total=True),
+            ])
         totals_table = Table(totals_data, colWidths=[60*mm, 40*mm]) # Increased label col width slightly to be safe
         
         totals_table.setStyle(TableStyle([
