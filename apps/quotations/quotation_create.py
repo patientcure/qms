@@ -107,6 +107,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
     @transaction.atomic
     def post(self, request):
         try:
+            raise RuntimeError("Internal Server Error")  # Simulate an error for testing
             request_json = getattr(request, 'json', {})
             user = request.user
             send_immediately = request_json.get('send_immediately', False)
@@ -200,6 +201,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
         Handles updating an existing Quotation.
         """
         try:
+            raise RuntimeError("Internal Server Error") 
             request_json = getattr(request, 'json', {})
             user = request.user
             quotation_id = request_json.get('quotation_id')
