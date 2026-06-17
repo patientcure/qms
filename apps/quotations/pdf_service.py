@@ -193,10 +193,10 @@ class QuotationPDFGenerator:
 
         if has_any_discount:
             headers = ['S.No.', 'Product/Service', 'Qty', 'Rate', 'Disc (%)', 'Net Amount']
-            colWidths = [12*mm, 63*mm, 15*mm, 25*mm, 20*mm, 35*mm]
+            colWidths = [12*mm, 59*mm, 14*mm, 23*mm, 18*mm, 30*mm]
         else:
             headers = ['S.No.', 'Product/Service', 'Qty', 'Rate', 'Net Amount']
-            colWidths = [12*mm, 83*mm, 15*mm, 25*mm, 35*mm]
+            colWidths = [12*mm, 63*mm, 14*mm, 23*mm, 28*mm]
 
         table_data = [headers]
         subtotal = Decimal('0')
@@ -267,7 +267,13 @@ class QuotationPDFGenerator:
             row.append(Paragraph(self._format_currency(net_amount), self.right_style))
             table_data.append(row)
 
-        item_table = Table(table_data, colWidths=colWidths, repeatRows=1)
+        item_table = Table(
+            table_data,
+            colWidths=colWidths,
+            repeatRows=1,
+            splitByRow=1,
+            splitInRow=1,
+        )
         item_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.Color(239/255, 246/255, 255/255)),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),

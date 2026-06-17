@@ -7,14 +7,32 @@ from .pdf_service import QuotationPDFGenerator
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_product_id(item):
+    product_value = item.get('product')
+    if isinstance(product_value, dict):
+        product_value = product_value.get('id')
+
+    if product_value in (None, ''):
+        return None
+
+    try:
+        return int(product_value)
+    except (TypeError, ValueError):
+        return None
+
 def save_quotation_pdf(quotation, request, items_data, terms=None):
     try:
-        product_ids = [item.get('product') for item in items_data if item.get('product')]
+        product_ids = [product_id for item in items_data if (product_id := _extract_product_id(item)) is not None]
         products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
 
         enriched_items = []
         for item in items_data:
-            product = products.get(int(item.get('product')))
+            product_id = _extract_product_id(item)
+            if product_id is None:
+                continue
+
+            product = products.get(product_id)
             if not product:
                 continue
 
