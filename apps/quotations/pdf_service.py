@@ -231,10 +231,10 @@ class QuotationPDFGenerator:
 
         if has_any_discount:
             headers = ['S.No.', 'Product/Service', 'Qty', 'Rate', 'Disc (%)', 'Net Amount']
-            colWidths = [12*mm, 59*mm, 14*mm, 23*mm, 18*mm, 30*mm]
+            colWidths = [12*mm, 69*mm, 14*mm, 30*mm, 14*mm, 31*mm]
         else:
             headers = ['S.No.', 'Product/Service', 'Qty', 'Rate', 'Net Amount']
-            colWidths = [12*mm, 63*mm, 14*mm, 23*mm, 28*mm]
+            colWidths = [12*mm, 82*mm, 14*mm, 31*mm, 31*mm]
 
         table_data = [headers]
         subtotal = Decimal('0')
@@ -280,8 +280,8 @@ class QuotationPDFGenerator:
             ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
             ('GRID', (0, 0), (-1, -1), 1, self.border_gray),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('WORDWRAP', (1, 1), (1, -1), 'CJK'),
         ]))
 
