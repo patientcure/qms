@@ -34,6 +34,12 @@ class QuotationPDFGenerator:
         self.terms = terms or []
         self.styles = getSampleStyleSheet()
         self.buffer = io.BytesIO()
+        self._image_reader_cache = {}
+        self.include_item_images = len(self.items_data) < 10
+
+        self._godrej_logo = self._load_cached_image_reader(finders.find("quotations/assets/godrej.jpeg"))
+        self._eureka_logo = self._load_cached_image_reader(finders.find("quotations/assets/eureka.jpeg"))
+        self._carysil_logo = self._load_cached_image_reader(finders.find("quotations/assets/carysil.jpeg"))
 
         self.doc = SimpleDocTemplate(
             self.buffer,
@@ -55,6 +61,16 @@ class QuotationPDFGenerator:
         self._define_styles()
         self._setup_templates()
 
+    def _load_cached_image_reader(self, image_path):
+        if not image_path:
+            return None
+        if image_path not in self._image_reader_cache:
+            try:
+                self._image_reader_cache[image_path] = ImageReader(image_path)
+            except Exception:
+                self._image_reader_cache[image_path] = None
+        return self._image_reader_cache[image_path]
+
     def _setup_templates(self):
         """Setup page templates with consistent header/footer"""
         frame = Frame(self.doc.leftMargin, self.doc.bottomMargin, self.doc.width, self.doc.height, id='normal')
@@ -74,9 +90,8 @@ class QuotationPDFGenerator:
         """Draw the exact header from letterhead"""
         page_width, page_height = A4
         try:
-            godrej_path = finders.find("quotations/assets/godrej.jpeg")
-            if godrej_path:
-                godrej_logo = ImageReader(godrej_path)
+            godrej_logo = self._godrej_logo
+            if godrej_logo:
                 logo_x = page_width - 60 * mm
                 logo_y = page_height - 25 * mm
                 canvas.drawImage(godrej_logo, logo_x, logo_y, width=40 * mm, height=15 * mm, preserveAspectRatio=True, mask='auto')
@@ -99,15 +114,13 @@ class QuotationPDFGenerator:
         """Draw the exact footer from letterhead"""
         page_width, _ = A4
         try:
-            eureka_path = finders.find("quotations/assets/eureka.jpeg")
-            if eureka_path:
-                canvas.drawImage(ImageReader(eureka_path), 60 * mm, 25 * mm, width=30 * mm, height=12 * mm, preserveAspectRatio=True, mask='auto')
+            if self._eureka_logo:
+                canvas.drawImage(self._eureka_logo, 60 * mm, 25 * mm, width=30 * mm, height=12 * mm, preserveAspectRatio=True, mask='auto')
         except Exception as e:
             print(f"Error loading Eureka logo: {e}")
         try:
-            carysil_path = finders.find("quotations/assets/carysil.jpeg")
-            if carysil_path:
-                canvas.drawImage(ImageReader(carysil_path), 120 * mm, 25 * mm, width=30 * mm, height=12 * mm, preserveAspectRatio=True, mask='auto')
+            if self._carysil_logo:
+                canvas.drawImage(self._carysil_logo, 120 * mm, 25 * mm, width=30 * mm, height=12 * mm, preserveAspectRatio=True, mask='auto')
         except Exception as e:
             print(f"Error loading Carysil logo: {e}")
         canvas.setStrokeColor(self.separator_gray)
@@ -221,8 +234,8 @@ class QuotationPDFGenerator:
             product_cell = Paragraph(description, self.normal_style)
 
             image_flowable = None
-            image_source = item.get('image_path') or item.get('image_url')           
-            if image_source:
+            image_source = item.get('image_path') or item.get('image_url')
+            if image_source and self.include_item_images:
                 try:
                     # Direct Disk Read (Milliseconds)
                     if os.path.exists(str(image_source)):
