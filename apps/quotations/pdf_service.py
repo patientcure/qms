@@ -35,7 +35,6 @@ class QuotationPDFGenerator:
         self.styles = getSampleStyleSheet()
         self.buffer = io.BytesIO()
         self._image_reader_cache = {}
-        self.include_item_images = len(self.items_data) < 10
 
         self._godrej_logo = self._load_cached_image_reader(finders.find("quotations/assets/godrej.jpeg"))
         self._eureka_logo = self._load_cached_image_reader(finders.find("quotations/assets/eureka.jpeg"))
@@ -159,6 +158,32 @@ class QuotationPDFGenerator:
         if not content: return ""
         return re.sub(r'<[^>]+>', '', content).strip()
 
+    def _build_product_cell(self, description, image_source=None):
+        elements = []
+        max_img_w = 16 * mm
+        max_img_h = 16 * mm
+
+        if image_source:
+            try:
+                if os.path.exists(str(image_source)):
+                    image_flowable = RLImage(image_source, width=max_img_w, height=max_img_h, kind='proportional')
+                    image_flowable.hAlign = 'LEFT'
+                    elements.append(image_flowable)
+                    elements.append(Spacer(1, 1.5 * mm))
+                elif str(image_source).startswith(('http://', 'https://')):
+                    resp = requests.get(image_source, timeout=1)
+                    resp.raise_for_status()
+                    img_io = io.BytesIO(resp.content)
+                    image_flowable = RLImage(img_io, width=max_img_w, height=max_img_h, kind='proportional')
+                    image_flowable.hAlign = 'LEFT'
+                    elements.append(image_flowable)
+                    elements.append(Spacer(1, 1.5 * mm))
+            except Exception:
+                pass
+
+        elements.append(Paragraph(description, self.normal_style))
+        return elements
+
     def _define_styles(self):
         """Define paragraph styles, keeping original styles"""
         self.title_style = ParagraphStyle('Title', parent=self.styles['Heading1'], fontSize=16, fontName='Helvetica-Bold', spaceAfter=14, alignment=TA_CENTER, textColor=self.dark_gray)
@@ -214,9 +239,6 @@ class QuotationPDFGenerator:
         table_data = [headers]
         subtotal = Decimal('0')
         total_item_discount = Decimal('0')
-        max_img_w = 18 * mm
-        max_img_h = 18 * mm
-
         for idx, item in enumerate(self.items_data, 1):
             quantity = self._to_decimal(item.get('quantity', 1))
             unit_price = self._to_decimal(item.get('unit_price', 0))
@@ -229,44 +251,8 @@ class QuotationPDFGenerator:
             subtotal += gross_amount
             total_item_discount += discount_amount
             description = item.get('description') or item.get('name', 'N/A')
-
-            # --- build product/service cell with optional image ---
-            product_cell = Paragraph(description, self.normal_style)
-
-            image_flowable = None
             image_source = item.get('image_path') or item.get('image_url')
-            if image_source and self.include_item_images:
-                try:
-                    # Direct Disk Read (Milliseconds)
-                    if os.path.exists(str(image_source)):
-                        image_flowable = RLImage(image_source, width=max_img_w, height=max_img_h, kind='proportional')
-                    # Fallback Network Request (Limited to 1 second)
-                    elif str(image_source).startswith(('http://', 'https://')):
-                        resp = requests.get(image_source, timeout=1)
-                        resp.raise_for_status()
-                        img_io = io.BytesIO(resp.content)
-                        image_flowable = RLImage(img_io, width=max_img_w, height=max_img_h, kind='proportional')
-                except Exception:
-                    image_flowable = None # Fail gracefully without hanging
-
-            if image_flowable:
-                # Create a small two-column table: [image | description]
-                # ensure left column fits image, right column uses rest of the product column width
-                product_col_width = colWidths[1] if len(colWidths) > 1 else 68*mm
-                inner_colwidths = [max_img_w + 2*mm, product_col_width - (max_img_w + 2*mm)]
-                inner_table = RLTable(
-                    [[image_flowable, Paragraph(description, self.normal_style)]],
-                    colWidths=inner_colwidths,
-                    style=[
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                        ('TOPPADDING', (0, 0), (-1, -1), 0),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                    ]
-                )
-                product_cell = inner_table  # cell becomes the mini-table
-            # --- end image cell build ---
+            product_cell = self._build_product_cell(description, image_source=image_source)
 
             row = [
                 Paragraph(str(idx), self.normal_style),
@@ -285,7 +271,6 @@ class QuotationPDFGenerator:
             colWidths=colWidths,
             repeatRows=1,
             splitByRow=1,
-            splitInRow=1,
         )
         item_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.Color(239/255, 246/255, 255/255)),
@@ -294,11 +279,10 @@ class QuotationPDFGenerator:
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
             ('GRID', (0, 0), (-1, -1), 1, self.border_gray),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('WORDWRAP', (3, 1), (-1, -1), 'CJK'),
-            ('NOSPLIT', (3, 1), (-1, -1)),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('WORDWRAP', (1, 1), (1, -1), 'CJK'),
         ]))
 
         return [item_table, Spacer(1, 8*mm)], {"subtotal": subtotal, "total_item_discount": total_item_discount}
