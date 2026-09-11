@@ -37,7 +37,8 @@ from django.db import transaction
 from django.conf import settings
 logger = logging.getLogger(__name__)
 from datetime import datetime
-from django.db.models import Count, Q, Case, When, F, FloatField, Max, Sum, OuterRef, Subquery
+from django.db.models import Count, Q, Case, When, F, FloatField, Max, Sum, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 from django.db.models.deletion import ProtectedError
 
 class JWTAuthMixin:
@@ -113,6 +114,33 @@ class SalespersonListView(AdminRequiredMixin, BaseAPIView):
             }
         ]
 
+        def count_for_user(model, relation, **filters):
+            return model.objects.filter(**{relation: OuterRef('pk')}, **filters).order_by().values(
+                relation
+            ).annotate(count=Count('pk')).values('count')[:1]
+
+        quotation_count = count_for_user(Quotation, 'assigned_to')
+        lead_count = count_for_user(Lead, 'assigned_to')
+        leads_created_count = count_for_user(Lead, 'created_by')
+        quotations_created_count = count_for_user(Quotation, 'created_by')
+        sent_quotation_count = Quotation.objects.filter(
+            assigned_to=OuterRef('pk'),
+        ).exclude(status=QuotationStatus.DRAFT).order_by().values(
+            'assigned_to'
+        ).annotate(count=Count('pk')).values('count')[:1]
+        accepted_quotation_count = count_for_user(
+            Quotation, 'assigned_to', status=QuotationStatus.ACCEPTED
+        )
+        rejected_quotation_count = count_for_user(
+            Quotation, 'assigned_to', status__in=[QuotationStatus.REJECTED, QuotationStatus.LOST]
+        )
+        converted_lead_count = count_for_user(
+            Lead, 'assigned_to', status=LeadStatus.CONVERTED
+        )
+        lost_lead_count = count_for_user(
+            Lead, 'assigned_to', status=LeadStatus.LOST
+        )
+
         salespeople = User.objects.filter(role=Roles.SALESPERSON).only(
             'id', 'first_name', 'last_name', 'email', 'is_active',
             'date_joined', 'last_login',
@@ -143,38 +171,15 @@ class SalespersonListView(AdminRequiredMixin, BaseAPIView):
                 to_attr='current_quotations',
             ),
         ).annotate(
-            quotation_count=Count('quotations', distinct=True),
-            lead_count=Count('leads', distinct=True),
-            leads_created_count=Count('leads_created', distinct=True),
-            quotations_created_count=Count('quotations_created', distinct=True),
-            sent_quotation_count=Count(
-                'quotations',
-                filter=~Q(quotations__status=QuotationStatus.DRAFT),
-                distinct=True,
-            ),
-            accepted_quotation_count=Count(
-                'quotations',
-                filter=Q(quotations__status=QuotationStatus.ACCEPTED),
-                distinct=True,
-            ),
-            rejected_quotation_count=Count(
-                'quotations',
-                filter=Q(quotations__status__in=[
-                    QuotationStatus.REJECTED,
-                    QuotationStatus.LOST,
-                ]),
-                distinct=True,
-            ),
-            converted_lead_count=Count(
-                'leads',
-                filter=Q(leads__status=LeadStatus.CONVERTED),
-                distinct=True,
-            ),
-            lost_lead_count=Count(
-                'leads',
-                filter=Q(leads__status=LeadStatus.LOST),
-                distinct=True,
-            ),
+            quotation_count=Coalesce(Subquery(quotation_count, output_field=IntegerField()), 0),
+            lead_count=Coalesce(Subquery(lead_count, output_field=IntegerField()), 0),
+            leads_created_count=Coalesce(Subquery(leads_created_count, output_field=IntegerField()), 0),
+            quotations_created_count=Coalesce(Subquery(quotations_created_count, output_field=IntegerField()), 0),
+            sent_quotation_count=Coalesce(Subquery(sent_quotation_count, output_field=IntegerField()), 0),
+            accepted_quotation_count=Coalesce(Subquery(accepted_quotation_count, output_field=IntegerField()), 0),
+            rejected_quotation_count=Coalesce(Subquery(rejected_quotation_count, output_field=IntegerField()), 0),
+            converted_lead_count=Coalesce(Subquery(converted_lead_count, output_field=IntegerField()), 0),
+            lost_lead_count=Coalesce(Subquery(lost_lead_count, output_field=IntegerField()), 0),
             accepted_revenue=Subquery(
                 Quotation.objects.filter(
                     assigned_to=OuterRef('pk'),
