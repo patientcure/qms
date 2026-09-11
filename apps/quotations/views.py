@@ -224,6 +224,7 @@ class SalespersonListView(AdminRequiredMixin, BaseAPIView):
                             'id': quotation.id,
                             'quotation_number': quotation.quotation_number,
                             'status': quotation.status,
+                            'pdf_url': quotation.file_url,
                             'total': float(quotation.total),
                             'follow_up_date': quotation.follow_up_date,
                             'customer': {
