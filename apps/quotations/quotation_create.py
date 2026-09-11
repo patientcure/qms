@@ -5,7 +5,7 @@ from django.db import transaction
 from django.conf import settings
 import logging, traceback
 from decimal import Decimal
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.core.exceptions import ObjectDoesNotExist
 
 from .views import BaseAPIView, JWTAuthMixin
@@ -133,14 +133,13 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
             quotation.status = QuotationStatus.DRAFT
 
             # Step 4: Handle assignment
-            if not quotation.assigned_to:
-                if getattr(user, 'role', None) == Roles.SALESPERSON:
-                    quotation.assigned_to = user
-                else:
-                    salesperson = User.objects.filter(role=Roles.SALESPERSON, is_active=True).annotate(
-                        num_quotations=Count('quotations')
-                    ).order_by('num_quotations', 'id').first()
-                    quotation.assigned_to = salesperson
+            if getattr(user, 'role', None) == Roles.SALESPERSON:
+                quotation.assigned_to = user
+            elif not quotation.assigned_to:
+                salesperson = User.objects.filter(role=Roles.SALESPERSON, is_active=True).annotate(
+                    num_quotations=Count('quotations')
+                ).order_by('num_quotations', 'id').first()
+                quotation.assigned_to = salesperson
             
             quotation.save() # Initial save to get an ID
 
@@ -153,13 +152,21 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
                     # Link existing lead
                     try:
                         lead = Lead.objects.get(id=lead_id)
-                        # Mark all old quotations of this lead as REVISED
-                        old_quotations = Quotation.objects.filter(lead_id=lead.id).exclude(id=quotation.id)
+                        # Mark only previous quotations as revised. The new quotation
+                        # must remain pending, even when it is already linked to lead.
+                        old_quotations = Quotation.objects.filter(
+                            Q(lead_id=lead.id) | Q(lead_links__lead=lead)
+                        ).exclude(id=quotation.id).distinct()
                         old_quotations.update(status=QuotationStatus.REVISED)
                         # Assign new quotation to the same person as the lead
                         quotation.assigned_to = lead.assigned_to
                         QuotationLeadLink.objects.get_or_create(quotation=quotation, lead=lead)
                         quotation.lead_id = lead.id
+                        quotation.status = (
+                            QuotationStatus.SENT
+                            if lead.status == LeadStatus.NEGOTIATION
+                            else QuotationStatus.PENDING
+                        )
                     except Lead.DoesNotExist:
                         logger.warning(f"Lead with id {lead_id} not found")
                 else:
@@ -229,7 +236,7 @@ class QuotationCreate(JWTAuthMixin, BaseAPIView):
 
             quotation = form.save(commit=False)
             quotation.customer = customer
-            quotation.status = QuotationStatus.PENDING
+            quotation.status = QuotationStatus.SENT
             quotation.created_by = user
             quotation.lead_id = lead.id if lead else None            
             if not quotation.assigned_to:

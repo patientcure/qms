@@ -37,7 +37,7 @@ from django.db import transaction
 from django.conf import settings
 logger = logging.getLogger(__name__)
 from datetime import datetime
-from django.db.models import Count, Q, Case, When, F, FloatField
+from django.db.models import Count, Q, Case, When, F, FloatField, Max, Sum, OuterRef, Subquery
 from django.db.models.deletion import ProtectedError
 
 class JWTAuthMixin:
@@ -99,19 +99,143 @@ class BaseAPIView(View):
 # ========== Salesperson Management ==========
 class SalespersonListView(AdminRequiredMixin, BaseAPIView):
     def get(self, request):
-        salespeople = User.objects.filter(role=Roles.SALESPERSON).order_by('-date_joined')
+        active_lead_statuses = [
+            status for status in LeadStatus.values
+            if status not in {LeadStatus.CONVERTED, LeadStatus.LOST}
+        ]
+        active_quotation_statuses = [
+            status for status in QuotationStatus.values
+            if status not in {
+                QuotationStatus.ACCEPTED,
+                QuotationStatus.REJECTED,
+                QuotationStatus.LOST,
+                QuotationStatus.EXPIRED,
+            }
+        ]
+
+        salespeople = User.objects.filter(role=Roles.SALESPERSON).prefetch_related(
+            Prefetch(
+                'leads',
+                queryset=Lead.objects.filter(status__in=active_lead_statuses)
+                .select_related('customer')
+                .order_by('-updated_at', '-created_at'),
+                to_attr='current_leads',
+            ),
+            Prefetch(
+                'quotations',
+                queryset=Quotation.objects.filter(status__in=active_quotation_statuses)
+                .select_related('customer')
+                .order_by('-updated_at', '-created_at'),
+                to_attr='current_quotations',
+            ),
+        ).annotate(
+            quotation_count=Count('quotations', distinct=True),
+            lead_count=Count('leads', distinct=True),
+            leads_created_count=Count('leads_created', distinct=True),
+            quotations_created_count=Count('quotations_created', distinct=True),
+            sent_quotation_count=Count(
+                'quotations',
+                filter=~Q(quotations__status=QuotationStatus.DRAFT),
+                distinct=True,
+            ),
+            accepted_quotation_count=Count(
+                'quotations',
+                filter=Q(quotations__status=QuotationStatus.ACCEPTED),
+                distinct=True,
+            ),
+            rejected_quotation_count=Count(
+                'quotations',
+                filter=Q(quotations__status__in=[
+                    QuotationStatus.REJECTED,
+                    QuotationStatus.LOST,
+                ]),
+                distinct=True,
+            ),
+            converted_lead_count=Count(
+                'leads',
+                filter=Q(leads__status=LeadStatus.CONVERTED),
+                distinct=True,
+            ),
+            lost_lead_count=Count(
+                'leads',
+                filter=Q(leads__status=LeadStatus.LOST),
+                distinct=True,
+            ),
+            accepted_revenue=Subquery(
+                Quotation.objects.filter(
+                    assigned_to=OuterRef('pk'),
+                    status=QuotationStatus.ACCEPTED,
+                )
+                .values('assigned_to')
+                .annotate(total_revenue=Sum('total'))
+                .values('total_revenue')[:1]
+            ),
+        ).order_by('-date_joined')
+
         data = []
         for person in salespeople:
+            sent_count = person.sent_quotation_count
+            conversion_rate = (
+                (person.accepted_quotation_count / sent_count) * 100
+                if sent_count else 0
+            )
+
             data.append({
                 'id': person.id,
                 'first_name': person.first_name,
                 'last_name': person.last_name,
                 'email': person.email,
                 'is_active': person.is_active,
-                'quotation_count': person.quotations.count(),
-                'lead_count': person.leads.count(),
+                'quotation_count': person.quotation_count,
+                'lead_count': person.lead_count,
                 'created_at': person.date_joined,
-                'last_login': person.last_login
+                'last_login': person.last_login,
+                'performance': {
+                    'leads_created': person.leads_created_count,
+                    'leads_assigned': person.lead_count,
+                    'converted_leads': person.converted_lead_count,
+                    'lost_leads': person.lost_lead_count,
+                    'quotations_created': person.quotations_created_count,
+                    'quotations_assigned': person.quotation_count,
+                    'sent_quotations': sent_count,
+                    'accepted_quotations': person.accepted_quotation_count,
+                    'rejected_quotations': person.rejected_quotation_count,
+                    'conversion_rate': round(conversion_rate, 2),
+                    'total_revenue': float(person.accepted_revenue or 0),
+                },
+                'current_work': {
+                    'leads': [
+                        {
+                            'id': lead.id,
+                            'lead_number': lead.lead_number,
+                            'status': lead.status,
+                            'priority': lead.priority,
+                            'follow_up_date': lead.follow_up_date,
+                            'customer': {
+                                'id': lead.customer_id,
+                                'name': lead.customer.name,
+                                'company_name': lead.customer.company_name,
+                            },
+                        }
+                        for lead in person.current_leads
+                    ],
+                    'quotations': [
+                        {
+                            'id': quotation.id,
+                            'quotation_number': quotation.quotation_number,
+                            'status': quotation.status,
+                            'pdf_url': quotation.file_url,
+                            'total': float(quotation.total),
+                            'follow_up_date': quotation.follow_up_date,
+                            'customer': {
+                                'id': quotation.customer_id,
+                                'name': quotation.customer.name,
+                                'company_name': quotation.customer.company_name,
+                            },
+                        }
+                        for quotation in person.current_quotations
+                    ],
+                },
             })
         return JsonResponse({'data': data})
 
@@ -269,12 +393,12 @@ class LeadCreateView(JWTAuthMixin, BaseAPIView):
             # 3. Create lead instance but do not save yet
             lead = form.save(commit=False)
 
-            # 4. Set created_by if user is SALESPERSON
-            if getattr(request.user, 'role', None) == 'SALESPERSON':
+            # 4. Salespeople own leads they create; admins use the normal assignment flow.
+            if getattr(request.user, 'role', None) == Roles.SALESPERSON:
                 lead.created_by = request.user
-
-            # 5. Auto-assign lead if not assigned
-            if not lead.assigned_to:
+                lead.assigned_to = request.user
+            elif not lead.assigned_to:
+                # 5. Auto-assign unassigned admin-created leads.
                 salesperson = Lead.get_least_loaded_salesperson()
                 if salesperson:
                     lead.assigned_to = salesperson
@@ -350,11 +474,20 @@ class LeadDetailView(BaseAPIView):
         #     # Ensure logging failure does not break the response
         #     logger.exception("Failed to log lead view action")
 
-        # # Activity logs for this lead (latest first)
+        linked_quotation_ids = set(
+            QuotationLeadLink.objects.filter(lead=lead).values_list('quotation_id', flat=True)
+        )
+        if lead.quotation_id:
+            linked_quotation_ids.add(lead.quotation_id)
+
         activity_logs = ActivityLog.objects.filter(
-            entity_type="Lead",
-            entity_id=str(lead.id)
+            Q(entity_type="Lead", entity_id=str(lead.id))
+            | Q(entity_type="Quotation", entity_id__in=[str(id_) for id_ in linked_quotation_ids])
         ).select_related('actor').order_by('-created_at')
+        quotation_numbers = dict(
+            Quotation.objects.filter(id__in=linked_quotation_ids)
+            .values_list('id', 'quotation_number')
+        )
 
         logs = []
         for log in activity_logs:
@@ -362,6 +495,12 @@ class LeadDetailView(BaseAPIView):
                 'id': log.id,
                 'action': log.action,
                 'message': log.message,
+                'entity_type': log.entity_type,
+                'quotation_number': (
+                    quotation_numbers.get(int(log.entity_id))
+                    if log.entity_type == 'Quotation' and log.entity_id.isdigit()
+                    else None
+                ),
                 'actor': {
                     'id': log.actor.id if log.actor else None,
                     'name': log.actor.get_full_name() if log.actor else 'System',
@@ -450,6 +589,19 @@ class LeadDetailView(BaseAPIView):
         
         if form.is_valid():
             lead = form.save()
+            if lead.status == LeadStatus.NEGOTIATION:
+                current_quotation = Quotation.objects.filter(pk=lead.quotation_id).first()
+                if not current_quotation:
+                    current_quotation = Quotation.objects.filter(
+                        lead_links__lead=lead
+                    ).order_by('-created_at', '-id').first()
+                if current_quotation:
+                    previous_quotations = Quotation.objects.filter(
+                        Q(lead_id=lead.id) | Q(lead_links__lead=lead)
+                    ).exclude(pk=current_quotation.pk).distinct()
+                    previous_quotations.update(status=QuotationStatus.REVISED)
+                    current_quotation.status = QuotationStatus.SENT
+                    current_quotation.save(update_fields=['status'])
             return JsonResponse({
                 'success': True,
                 'message': "Lead updated successfully",
@@ -663,7 +815,7 @@ class LeadQuotationsView(JWTAuthMixin, BaseAPIView):
 
             quotations = Quotation.objects.filter(lead_links__lead=lead).select_related(
                 'customer', 'assigned_to', 'created_by'
-            ).prefetch_related('terms', 'details__product').order_by('-created_at')
+            ).prefetch_related('terms', 'details__product').order_by('-created_at', '-id')
 
             data = []
             for quotation in quotations:
@@ -713,12 +865,27 @@ class QuotationSendView(JWTAuthMixin, BaseAPIView):
         
         try:
             print(f"Sending quotation {quotation.quotation_number} to {quotation.customer.email}")
+            if quotation.lead_id:
+                previous_quotations = Quotation.objects.filter(
+                    Q(lead_id=quotation.lead_id) | Q(lead_links__lead_id=quotation.lead_id)
+                ).exclude(pk=quotation.pk).distinct()
+                previous_quotations.update(status=QuotationStatus.REVISED)
+            quotation.status = QuotationStatus.SENT
+            quotation.emailed_at = timezone.now()
+            quotation.save(update_fields=['status', 'emailed_at'])
+            ActivityLog.log(
+                actor=request.user,
+                action=ActivityAction.QUOTATION_SENT,
+                entity=quotation,
+                message=f"Quotation {quotation.quotation_number} sent to customer.",
+                customer=quotation.customer,
+            )
             return JsonResponse({
                 'success': True,
                 'message': 'Quotation sent successfully',
                 'data': {
                     'status': quotation.status,
-                    'emailed_at': timezone.localtime(quotation.emailed_at).isoformat() if quotation.emailed_at else None
+                    'emailed_at': timezone.localtime(quotation.emailed_at).isoformat()
                 }
             })
         except Exception as e:
@@ -772,7 +939,7 @@ class CustomerListView(JWTAuthMixin,BaseAPIView):
     def get(self, request):
         user = request.user
 
-        leads_qs = Lead.objects.select_related('assigned_to', 'created_by')
+        leads_qs = Lead.objects.select_related('assigned_to', 'created_by').order_by('-created_at', '-id')
 
         if getattr(user, 'role', None) == 'SALESPERSON':
             leads_qs = leads_qs.filter(Q(assigned_to=user) | Q(created_by=user))
@@ -834,9 +1001,9 @@ class AllCustomerListView(JWTAuthMixin,BaseAPIView):
         user = getattr(request, "user", None)
         
         if user and getattr(user, "role", None) == Roles.SALESPERSON:
-            leads_qs = Lead.objects.filter(Q(assigned_to=user) | Q(created_by=user))
+            leads_qs = Lead.objects.filter(Q(assigned_to=user) | Q(created_by=user)).order_by('-created_at', '-id')
 
-            quotations_qs = Quotation.objects.filter(Q(assigned_to=user) | Q(created_by=user))
+            quotations_qs = Quotation.objects.filter(Q(assigned_to=user) | Q(created_by=user)).order_by('-created_at', '-id')
             customer_filter = Q(leads__in=leads_qs) | Q(quotations__in=quotations_qs)
 
             customers = Customer.objects.filter(
@@ -1240,7 +1407,9 @@ class CustomerSearchView(BaseAPIView):
 class CompanyListView(BaseAPIView):
     def get(self, request):
         companies_qs = Customer.objects.exclude(company_name__isnull=True).exclude(company_name__exact='')
-        companies = companies_qs.values_list('company_name', flat=True).distinct().order_by('company_name')
+        companies = companies_qs.values('company_name').annotate(
+            latest_created_at=Max('created_at')
+        ).order_by('-latest_created_at', '-company_name').values_list('company_name', flat=True)
         return JsonResponse({'data': list(companies)})
 
 #region Product Management
@@ -1339,7 +1508,7 @@ class ProductDetailView(JWTAuthMixin, BaseAPIView):
             return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
+    queryset = Category.objects.all().order_by('-id')
     serializer_class = CategorySerializer
     authentication_classes = []
     permission_classes = []

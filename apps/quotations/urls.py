@@ -78,6 +78,11 @@ urlpatterns = [
     # ============ Lead Description Management API ==========
     path('api/leads/<int:lead_id>/descriptions/', LeadDescriptionManageView.as_view(), name='lead_description_manage'), 
     path('api/leads/<int:lead_id>/quotations/', LeadQuotationsView.as_view(), name='lead_quotations'),
+    path(
+        'api/leads/<int:lead_id>/quotations/<int:pk>/revise/',
+        DuplicateQuotationAPIView.as_view(),
+        name='lead_quotation_revise',
+    ),
     
     # ========== Quotation Management API ==========
     path('api/quotations/', QuotationListView.as_view(), name='quotation_list'),

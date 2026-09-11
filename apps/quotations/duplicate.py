@@ -4,7 +4,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import Quotation, ProductDetails, QuotationStatus, Lead, LeadStatus
+from .models import (
+    ActivityLog,
+    Lead,
+    ProductDetails,
+    Quotation,
+    QuotationLeadLink,
+)
+from .choices import ActivityAction, LeadStatus, QuotationStatus
 
 
 class DuplicateQuotationAPIView(APIView):
@@ -19,7 +26,7 @@ class DuplicateQuotationAPIView(APIView):
     def post(self, request, pk, *args, **kwargs):
         """
         Finds the original quotation by its primary key (pk), creates a deep copy
-        of both the quotation and its associated lead (if any), and saves them as new instances.
+        and keeps it attached to the original quotation's lead.
         """
         try:
             # Step 1: Retrieve the original quotation and its related items efficiently.
@@ -27,28 +34,28 @@ class DuplicateQuotationAPIView(APIView):
                 Quotation.objects.prefetch_related('details', 'terms'), 
                 pk=pk
             )
+            requested_lead_id = kwargs.get('lead_id')
+            if requested_lead_id and not (
+                original_quotation.lead_id == requested_lead_id
+                or QuotationLeadLink.objects.filter(
+                    quotation=original_quotation,
+                    lead_id=requested_lead_id,
+                ).exists()
+            ):
+                return Response(
+                    {"error": "Quotation is not linked to this lead."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             original_product_details = list(original_quotation.details.all())
             original_terms = list(original_quotation.terms.all())
 
-            # Step 2: Duplicate the associated lead, if it exists.
-            new_lead_id = None
-            if original_quotation.lead_id:
-                try:
-                    original_lead = Lead.objects.get(pk=original_quotation.lead_id)
-                    new_lead = Lead(
-                        customer=original_lead.customer,
-                        assigned_to=original_lead.assigned_to,
-                        lead_source=original_lead.lead_source,
-                        priority=original_lead.priority,
-                        follow_up_date=original_lead.follow_up_date,
-                        notes=f"Duplicated from Lead ID: {original_lead.pk}.\n\n{original_lead.notes}",
-                        status=LeadStatus.PENDING, # Reset status to default
-                    )
-                    new_lead.save()
-                    new_lead_id = new_lead.pk
-                except Lead.DoesNotExist:
-                    # If the lead_id on the quotation is invalid, we proceed without a lead.
-                    pass
+            # Revisions stay under the same lead; never create a second lead.
+            lead_id = requested_lead_id or original_quotation.lead_id
+            if not lead_id:
+                lead_id = QuotationLeadLink.objects.filter(
+                    quotation=original_quotation
+                ).values_list('lead_id', flat=True).first()
+            lead = Lead.objects.filter(pk=lead_id).first()
 
             # Step 3: Create a new quotation instance, copying necessary fields.
             new_quotation = Quotation(
@@ -62,14 +69,20 @@ class DuplicateQuotationAPIView(APIView):
                 tax_rate=original_quotation.tax_rate,
                 total=original_quotation.total,
                 discount=original_quotation.discount,
-                lead_id=new_lead_id,
+                lead_id=lead.pk if lead else None,
                 file_url= original_quotation.file_url,
+                status=QuotationStatus.SENT,
             )
             new_quotation.save()
 
-            # Step 4: If a new lead was created, link it back to the new quotation.
-            if new_lead_id:
-                Lead.objects.filter(pk=new_lead_id).update(quotation_id=new_quotation.pk)
+            if lead:
+                original_quotation.status = QuotationStatus.REVISED
+                original_quotation.save(update_fields=['status'])
+                lead.quotation_id = new_quotation.pk
+                lead.status = LeadStatus.NEGOTIATION
+                lead.save(update_fields=['quotation_id', 'status'])
+                QuotationLeadLink.objects.get_or_create(quotation=original_quotation, lead=lead)
+                QuotationLeadLink.objects.get_or_create(quotation=new_quotation, lead=lead)
 
             # Step 5: Copy the ManyToMany relationship for terms.
             if original_terms:
@@ -85,9 +98,23 @@ class DuplicateQuotationAPIView(APIView):
             if new_details_to_create:
                 ProductDetails.objects.bulk_create(new_details_to_create)
 
-            # Step 7: Return the ID of the newly created quotation.
+            ActivityLog.log(
+                actor=request.user if request.user.is_authenticated else None,
+                action=ActivityAction.QUOTATION_CREATED,
+                entity=new_quotation,
+                message=(
+                    f"Quotation {new_quotation.quotation_number} revised from "
+                    f"{original_quotation.quotation_number}"
+                ),
+                customer=new_quotation.customer,
+            )
+
             return Response(
-                {"message": "Quotation and lead duplicated successfully.", "new_quotation_id": new_quotation.pk},
+                {
+                    "message": "Quotation revised successfully.",
+                    "new_quotation_id": new_quotation.pk,
+                    "lead_id": lead.pk if lead else None,
+                },
                 status=status.HTTP_201_CREATED,
             )
 
