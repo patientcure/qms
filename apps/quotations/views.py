@@ -113,11 +113,19 @@ class SalespersonListView(AdminRequiredMixin, BaseAPIView):
             }
         ]
 
-        salespeople = User.objects.filter(role=Roles.SALESPERSON).prefetch_related(
+        salespeople = User.objects.filter(role=Roles.SALESPERSON).only(
+            'id', 'first_name', 'last_name', 'email', 'is_active',
+            'date_joined', 'last_login',
+        ).prefetch_related(
             Prefetch(
                 'leads',
                 queryset=Lead.objects.filter(status__in=active_lead_statuses)
                 .select_related('customer')
+                .only(
+                    'id', 'created_at', 'updated_at', 'lead_number', 'customer_id',
+                    'assigned_to_id', 'status', 'priority', 'follow_up_date',
+                    'customer__id', 'customer__name', 'customer__company_name',
+                )
                 .order_by('-updated_at', '-created_at'),
                 to_attr='current_leads',
             ),
@@ -125,6 +133,12 @@ class SalespersonListView(AdminRequiredMixin, BaseAPIView):
                 'quotations',
                 queryset=Quotation.objects.filter(status__in=active_quotation_statuses)
                 .select_related('customer')
+                .only(
+                    'id', 'created_at', 'updated_at', 'quotation_number',
+                    'customer_id', 'assigned_to_id', 'status', 'file_url', 'total',
+                    'follow_up_date', 'customer__id', 'customer__name',
+                    'customer__company_name',
+                )
                 .order_by('-updated_at', '-created_at'),
                 to_attr='current_quotations',
             ),
